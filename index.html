@@ -152,7 +152,7 @@ function initTagGame(){
   var playerNames={}, keys={};
   var walkPhase=0, wasOnGround=true, landTimer=0, jumpPrep=0, airTime=0;
   var syncMoving=false, syncSprint=false;
-  var JUMP_PREP=0.12, LAND_DUR=0.28, ANIM_SMOOTH=18;
+  var JUMP_PREP=0.12, LAND_DUR=0.28, ANIM_SMOOTH=18, JUMP_LIMB_AMP=1/1.5;
   var locked=false, playing=false, multiplayer=false, thirdPerson=false;
   var peer=null,isHost=false,roomCode="",myId="",myName="";
   var connections={},remotePlayers={}, syncTimer=null;
@@ -394,7 +394,8 @@ function initTagGame(){
   }
   function poseFromSample(p,jumpPose){
     if(!jumpPose)return neutralPose();
-    return{lArmX:-p.armX,rArmX:p.armX,lArmZ:0,rArmZ:0,lLegX:p.armX,rLegX:-p.armX,lLegZ:0,rLegZ:0,legSp:0,torsoX:p.torsoX,headX:p.headX,crouch:p.crouch};
+    var a=p.armX*JUMP_LIMB_AMP;
+    return{lArmX:-a,rArmX:a,lArmZ:0,rArmZ:0,lLegX:a,rLegX:-a,lLegZ:0,rLegZ:0,legSp:0,torsoX:p.torsoX,headX:p.headX,crouch:p.crouch};
   }
   function neutralPose(){
     return{lArmX:0,rArmX:0,lArmZ:0,rArmZ:0,lLegX:0,rLegX:0,lLegZ:0,rLegZ:0,legSp:0,torsoX:0,headX:0,crouch:0};
@@ -404,7 +405,7 @@ function initTagGame(){
     if(st.landT>0){
       var lt=1-st.landT/LAND_DUR,p=sampleJumpKeys(lerp(0.9,1,lt));
       var bump=Math.sin(lt*Math.PI);
-      p.armX-=bump*0.35;p.crouch+=bump*0.08;
+      p.armX-=bump*0.35*JUMP_LIMB_AMP;p.crouch+=bump*0.08;
       return poseFromSample(p,true);
     }
     if(!st.onGround){
@@ -448,15 +449,15 @@ function initTagGame(){
     var camOff=0;
     if(jumpPrep>0){
       var p=sampleJumpKeys(lerp(0,0.12,1-jumpPrep/JUMP_PREP));
-      var c=jumpPrep/JUMP_PREP;
-      rightHand.rotation.x=HAND.rx-p.armX*0.2;
+      var c=jumpPrep/JUMP_PREP,ax=p.armX*JUMP_LIMB_AMP;
+      rightHand.rotation.x=HAND.rx+ax*0.22;
       rightHand.position.y=HAND.y-p.crouch*0.03;
-      rightHand.position.z=HAND.z-p.armX*0.025;camOff=-p.crouch*0.55*c;
+      rightHand.position.z=HAND.z-ax*0.03;camOff=-p.crouch*0.55*c;
     }else if(!player.onGround){
-      airTime+=dt;var p=sampleJumpKeys(airJumpPhase(airTime,player.vel.y));
-      rightHand.rotation.x=HAND.rx+p.armX*0.22;
+      airTime+=dt;var p=sampleJumpKeys(airJumpPhase(airTime,player.vel.y)),ax=p.armX*JUMP_LIMB_AMP;
+      rightHand.rotation.x=HAND.rx-ax*0.25;
       rightHand.position.y=HAND.y+p.crouch*0.02;
-      rightHand.position.z=HAND.z+p.armX*0.02;camOff=p.crouch*0.4+(player.vel.y>0?0.02:-0.012);
+      rightHand.position.z=HAND.z+ax*0.025;camOff=p.crouch*0.4+(player.vel.y>0?0.02:-0.012);
     }else if(moving){
       airTime=0;walkPhase+=dt*(spd>WALK?10.5:7.2);var sw=Math.sin(walkPhase),bob=Math.sin(walkPhase*2);
       rightHand.rotation.x=HAND.rx+sw*0.1;
