@@ -139,7 +139,7 @@ html.tag-framed #frameWarn[hidden]{display:flex!important}
 <div id="menu">
   <div class="panel">
     <h1>Party Grounds</h1>
-    <p>One file only — upload index.html to GitHub Pages</p>
+    <p id="menuSubtext">Loading...</p>
     <input id="nameInput" placeholder="Your username" maxlength="12">
     <button type="button" class="btn btn-blue" id="playSolo">Play Now (Solo)</button>
     <hr style="margin:0.8rem 0;border:none;border-top:1px solid #ddd">
@@ -184,9 +184,19 @@ function initTagGame(){
   if(openBtn)openBtn.addEventListener("click",function(){window.open(location.href,"_blank","noopener,noreferrer");});
   if(window.__TAG_FRAMED){return;}
   function canMultiplayer(){return location.protocol==="https:";}
+  function updateMenuEnv(){
+    var sub=document.getElementById("menuSubtext"),tip=document.getElementById("fileTip");
+    var online=canMultiplayer();
+    if(sub){
+      if(online)sub.textContent="已連上 GitHub Pages。按 Create Room 開房，或 Join Room 輸入代碼加入。";
+      else if(window.__TAG_FILE)sub.textContent="本機檔案：可單人遊玩。多人請用 GitHub Pages 的 https 網址開啟。";
+      else sub.textContent="請用 GitHub Pages（https）開啟此遊戲以使用多人模式。";
+    }
+    if(tip)tip.hidden=!!online;
+  }
   if(window.__TAG_FILE){
     var tip=document.getElementById("fileTip");
-    if(tip)tip.hidden=false;
+    if(tip&&!canMultiplayer())tip.hidden=false;
   }
   if(typeof THREE==="undefined"){alert("Game failed to load: THREE.js missing");return;}
   var EYE=1.75, MAP=400, HALF=MAP/2-2, GRAV=-24, JUMP=9, WALK=8;
@@ -209,6 +219,8 @@ function initTagGame(){
   var menuStatus=document.getElementById("menuStatus");
   function setStatus(t){menuStatus.textContent=t;}
   nameInput.value="Player"+Math.floor(Math.random()*900+100);
+  updateMenuEnv();
+  if(canMultiplayer())setStatus("多人模式已就緒");
 
   var player={pos:new THREE.Vector3(0,1.75,5),vel:new THREE.Vector3(),onGround:true,yaw:0,pitch:0};
   var myColors={shirt:NOOB.shirt,pants:NOOB.pants,skin:NOOB.skin};
@@ -358,6 +370,7 @@ function initTagGame(){
     if(dashActive)dashHud.textContent="Dashing...";
     else dashHud.textContent=dashCd>0?"Dash cooldown: "+dashCd.toFixed(1)+"s":"Dash ready (Shift)";
   }
+  function noobColors(){return{shirt:NOOB.shirt,pants:NOOB.pants,skin:NOOB.skin};}
   function addNoobFace(head){
     var g=new THREE.Group();g.position.z=-0.53;
     var cv=document.createElement("canvas");cv.width=128;cv.height=128;
