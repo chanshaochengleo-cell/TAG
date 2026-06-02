@@ -59,6 +59,7 @@ html.tag-framed #frameWarn[hidden]{display:flex!important}
 #dashHud.on{display:block}
 #roleHud{position:fixed;top:12px;left:50%;transform:translateX(-50%);z-index:9;pointer-events:none;background:rgba(0,0,0,0.45);color:#fff;padding:4px 10px;border-radius:999px;font-size:12px;letter-spacing:0.06em;display:none}
 #roleHud.on{display:block}
+#roleHud.spectator-tag{background:rgba(226,35,26,0.95);color:#fff;font-size:clamp(1.2rem,4vw,1.65rem);font-weight:900;padding:14px 28px;border-radius:12px;border:3px solid #fff;box-shadow:0 8px 36px rgba(226,35,26,0.55);letter-spacing:0.14em}
 #matchTimer{position:fixed;top:44px;right:12px;z-index:9;pointer-events:none;background:rgba(0,0,0,0.55);color:#fff;padding:6px 12px;border-radius:8px;font-size:15px;font-weight:800;font-variant-numeric:tabular-nums;letter-spacing:0.06em;display:none}
 #matchTimer.on{display:block}
 .panel .nameRow{display:flex;gap:0.4rem;align-items:stretch;margin:0.35rem 0}
@@ -164,7 +165,7 @@ html.tag-framed #frameWarn[hidden]{display:flex!important}
         <span class="mapVoteTitle">Baseplate</span>
         <span class="mapVotePct" id="mapPickPct0">0%</span>
       </button>
-      <button type="button" class="serverHubCard muted pickCard" id="mapPick1" disabled>
+      <button type="button" class="serverHubCard pickCard" id="mapPick1">
         <span class="mapVoteTitle">Mountain</span>
         <span class="mapVotePct" id="mapPickPct1">0%</span>
       </button>
@@ -253,6 +254,7 @@ function initTagGame(){
   }
   if(typeof THREE==="undefined"){alert("Game failed to load: THREE.js missing");return;}
   var EYE=1.75, MAP=400, HALF=MAP/2-2, GRAV=-24, JUMP=9, WALK=8;
+  var mapHalf=HALF, currentMap=0, mapDecor=null, mountains=[];
   var DASH_CD=3, DASH_PX=500, DASH_DUR=0.28, dashCd=0, dashActive=null;
   var lobbyPhase="none", roomLocked=false, lobbyRoster={}, myLobbyVote=null;
   var MODE_VOTE_SEC=5, MAP_VOTE_SEC=5;
@@ -312,9 +314,10 @@ function initTagGame(){
   var peer=null,isHost=false,roomCode="",myId="",myName="";
   var connections={},remotePlayers={}, syncTimer=null;
   var scene,camera,renderer,rightHand,localAvatar=null;
+  var floorMesh=null, gridHelper=null;
   var TP_DIST=5.5, TP_HEIGHT=1.1;
   var MATCH_DUR=300, ROLL_DUR=2.5, START_DELAY=1, TAG_CLICK_PX=100, TAG_WORLD_RANGE=7;
-  var match={phase:"idle",taggerId:"",roles:{},spectators:{},endAt:0,rollEndsAt:0,winEndsAt:0,winnerTeam:"",winners:[]};
+  var match={phase:"idle",taggerId:"",roles:{},spectators:{},spawns:{},endAt:0,rollEndsAt:0,winEndsAt:0,winnerTeam:"",winners:[]};
   var myRole="runner", spectator=false;
   var rollAnimNext=0, rollAnimPick="";
   var winResetTimer=null;
@@ -322,9 +325,41 @@ function initTagGame(){
   function setHud(el,on){if(!el)return;el.hidden=!on;el.classList.toggle("on",!!on);}
   function setRoleHud(){
     if(!roleHud)return;
-    if(!multiplayer||match.phase==="idle"){setHud(roleHud,false);return;}
+    if(!multiplayer||match.phase==="idle"){setHud(roleHud,false);roleHud.classList.remove("spectator-tag");return;}
     setHud(roleHud,true);
-    roleHud.textContent=spectator?"SPECTATOR":("You are "+(myRole==="tagger"?"TAGGER":"RUNNER"));
+    if(spectator){
+      roleHud.textContent="SPECTATOR";
+      roleHud.classList.add("spectator-tag");
+    }else{
+      roleHud.classList.remove("spectator-tag");
+      roleHud.textContent="You are "+(myRole==="tagger"?"TAGGER":"RUNNER");
+    }
+  }
+  function clearAllRemotePlayers(){
+    for(var id in remotePlayers){
+      if(remotePlayers[id].avatar)scene.remove(remotePlayers[id].avatar);
+      delete remotePlayers[id];
+    }
+  }
+  function pruneRemotePlayersToMatch(){
+    if(!match.roles)return;
+    for(var id in remotePlayers){
+      if(!match.roles[id]){
+        scene.remove(remotePlayers[id].avatar);
+        delete remotePlayers[id];
+        removePlayerName(id);
+      }
+    }
+  }
+  function teardownSession(){
+    clearAllRemotePlayers();
+    connections={};
+    lobbyRoster={};
+    lobbyPhase="none";
+    roomLocked=false;
+    playerNames={};
+    if(syncTimer){clearInterval(syncTimer);syncTimer=null;}
+    if(peer){try{peer.destroy();}catch(e){}peer=null;}
   }
   function showRoll(text,sub){if(rollBig)rollBig.textContent=text||"ROLLING...";if(rollSub)rollSub.textContent=sub||"";setHud(rollHud,true);}
   function hideRoll(){setHud(rollHud,false);}
@@ -360,12 +395,14 @@ function initTagGame(){
     playing=false;locked=false;
     if(document.pointerLockElement===canvas)document.exitPointerLock();
     clickPlay.classList.remove("show");
+    teardownSession();
     menu.style.display="";
     document.getElementById("createBtn").style.display="";
     document.getElementById("joinBtn").style.display="";
     document.getElementById("roomInput").style.display="";
     document.getElementById("hostPanel").hidden=true;
-    multiplayer=false;isHost=false;roomLocked=false;
+    multiplayer=false;isHost=false;
+    if(localAvatar)localAvatar.group.visible=false;
   }
 
   document.getElementById("playSolo").addEventListener("click",function(){
@@ -392,6 +429,7 @@ function initTagGame(){
   document.getElementById("readyLobbyBtn").addEventListener("click",onReadyLobbyBtn);
   document.getElementById("mapVote0").addEventListener("click",function(){castModeVote(0);});
   document.getElementById("mapPick0").addEventListener("click",function(){castMapVote(0);});
+  document.getElementById("mapPick1").addEventListener("click",function(){castMapVote(1);});
   document.getElementById("hubCardTag").addEventListener("click",function(){closeServerHub();});
   document.getElementById("hubCard2").addEventListener("click",function(){});
   document.getElementById("hubCard3").addEventListener("click",function(){});
@@ -422,9 +460,9 @@ function initTagGame(){
     sun.shadow.camera.left=sun.shadow.camera.bottom=-HALF-10;
     sun.shadow.camera.right=sun.shadow.camera.top=HALF+10;
     scene.add(sun);
-    var floor=new THREE.Mesh(new THREE.PlaneGeometry(MAP,MAP),new THREE.MeshStandardMaterial({color:0xffffff,roughness:0.3,metalness:0.05}));
-    floor.rotation.x=-Math.PI/2;floor.receiveShadow=true;scene.add(floor);
-    scene.add(new THREE.GridHelper(MAP,40,0xcccccc,0xeeeeee));
+    floorMesh=new THREE.Mesh(new THREE.PlaneGeometry(MAP,MAP),new THREE.MeshStandardMaterial({color:0xffffff,roughness:0.3,metalness:0.05}));
+    floorMesh.rotation.x=-Math.PI/2;floorMesh.receiveShadow=true;scene.add(floorMesh);
+    gridHelper=new THREE.GridHelper(MAP,40,0xcccccc,0xeeeeee);scene.add(gridHelper);
     rightHand=makeNoobHand();camera.add(rightHand);
   } catch(err){
     setStatus("WebGL error: "+err.message);
@@ -437,13 +475,13 @@ function initTagGame(){
   clickPlay.addEventListener("click",function(){canvas.requestPointerLock();});
   // If overlay isn't showing, still allow click-to-lock.
   window.addEventListener("mousedown",function(){
-    if(playing&&!locked&&!inLobbyUi()&&!spectator){
+    if(playing&&!locked&&!inLobbyUi()){
       try{canvas.requestPointerLock();}catch(e){}
     }
   },true);
   document.addEventListener("pointerlockchange",function(){
     locked=document.pointerLockElement===canvas;
-    clickPlay.classList.toggle("show",playing&&!locked&&!inLobbyUi()&&!spectator);
+    clickPlay.classList.toggle("show",playing&&!locked&&!inLobbyUi());
     crosshair.classList.toggle("on",locked&&viewMode===0);
     if(rightHand)rightHand.visible=locked&&playing&&viewMode===0&&!inLobbyUi()&&!spectator;
     updateDashHud();
@@ -474,6 +512,8 @@ function initTagGame(){
     for(var id in remotePlayers){
       var rp=remotePlayers[id],t=rp.target;
       if(t.sp)continue;
+      if(!match.roles[id]||match.roles[id]!=="runner")continue;
+      if(match.spectators[id])continue;
       if(t.role!=="runner")continue;
       var v=rp.avatar.position.clone();v.y=EYE;
       var p=v.project(camera);
@@ -501,9 +541,131 @@ function initTagGame(){
     return(px/window.innerHeight)*worldH;
   }
   function clampPlayerPos(){
-    player.pos.x=Math.max(-HALF,Math.min(HALF,player.pos.x));
-    player.pos.z=Math.max(-HALF,Math.min(HALF,player.pos.z));
+    player.pos.x=Math.max(-mapHalf,Math.min(mapHalf,player.pos.x));
+    player.pos.z=Math.max(-mapHalf,Math.min(mapHalf,player.pos.z));
     if(player.pos.y<EYE){player.pos.y=EYE;player.vel.y=0;player.onGround=true;}
+  }
+
+  function clearMap(){
+    if(mapDecor){scene.remove(mapDecor);mapDecor=null;}
+    mapHalf=HALF;
+    currentMap=0;
+    mountains=[];
+    if(floorMesh)floorMesh.visible=true;
+    if(gridHelper)gridHelper.visible=true;
+  }
+  function setMap(idx){
+    clearMap();
+    currentMap=idx||0;
+    if(currentMap===1){
+      // Hide baseplate visuals to prevent z-fighting & white outside-map floor.
+      if(floorMesh)floorMesh.visible=false;
+      if(gridHelper)gridHelper.visible=false;
+      // Mountain is 2x smaller playable area.
+      mapHalf=Math.floor(HALF/2);
+      mapDecor=new THREE.Group();
+      // Outer flat grass ring (small) — mountains dominate interior (about x6 bigger than ring width).
+      var ringW=Math.max(10,Math.floor(mapHalf*0.12));
+      var outerR=Math.max(30,mapHalf-2);
+      var innerR=Math.max(12,outerR-ringW);
+      var grassMat=new THREE.MeshStandardMaterial({color:0x4CAF50,roughness:0.95});
+      var ring=new THREE.Mesh(new THREE.RingGeometry(innerR,outerR,64,2),grassMat);
+      ring.rotation.x=-Math.PI/2;ring.position.y=0.05;ring.receiveShadow=true;
+      mapDecor.add(ring);
+
+      // Interior dirt/rock ground
+      var dirtMat=new THREE.MeshStandardMaterial({color:0xB08A5A,roughness:1});
+      var dirt=new THREE.Mesh(new THREE.CircleGeometry(innerR,64),dirtMat);
+      dirt.rotation.x=-Math.PI/2;dirt.receiveShadow=true;dirt.position.y=0.04;
+      mapDecor.add(dirt);
+
+      // 6 smooth Fuji-style mountains (smooth cone + irregular snowline + snow streaks)
+      var mDefs=[
+        {x:-innerR*0.25,z:-innerR*0.18,r:ringW*6.2,h:ringW*8.8},
+        {x: innerR*0.28,z:-innerR*0.10,r:ringW*5.6,h:ringW*8.0},
+        {x:-innerR*0.08,z: innerR*0.30,r:ringW*5.2,h:ringW*7.6},
+        {x: innerR*0.10,z: innerR*0.05,r:ringW*6.8,h:ringW*9.4},
+        {x: innerR*0.34,z: innerR*0.28,r:ringW*4.9,h:ringW*7.2},
+        {x:-innerR*0.36,z: innerR*0.22,r:ringW*5.0,h:ringW*7.4},
+      ];
+      var rockMat=new THREE.MeshStandardMaterial({color:0x4A4A4A,roughness:1});
+      var snowMat=new THREE.MeshStandardMaterial({color:0xffffff,roughness:0.92});
+      function addFujiMountain(md){
+        mountains.push({x:md.x,z:md.z,r:md.r,h:md.h});
+        var g=new THREE.Group();
+        // smoother cone
+        var geom=new THREE.ConeGeometry(md.r,md.h,64,1);
+        var mesh=new THREE.Mesh(geom,rockMat);
+        mesh.position.set(0,md.h*0.5,0);
+        mesh.castShadow=true;mesh.receiveShadow=true;
+        g.add(mesh);
+
+        // snow cap: apex aligned with mountain tip; base radius matches mountain at snowline
+        var capH=md.h*0.42;
+        var capR=md.r*(capH/md.h);
+        var capGeom=new THREE.ConeGeometry(capR,capH,64,1);
+        var pos=capGeom.attributes.position;
+        for(var vi=0;vi<pos.count;vi++){
+          var y=pos.getY(vi);
+          if(y>-capH*0.35)continue; // wavy snowline only at base, keep tip sharp
+          var x=pos.getX(vi), z=pos.getZ(vi);
+          var a=Math.atan2(z,x);
+          var n=0.12*Math.sin(a*5.0)+0.07*Math.sin(a*11.0+0.7);
+          pos.setX(vi,x*(1+n));
+          pos.setZ(vi,z*(1+n));
+        }
+        pos.needsUpdate=true;capGeom.computeVertexNormals();
+        var cap=new THREE.Mesh(capGeom,snowMat);
+        cap.position.set(0,md.h-capH*0.5,0); // white tip = mountain tip at y=md.h
+        cap.castShadow=true;cap.receiveShadow=true;
+        g.add(cap);
+
+        var snowBaseY=md.h-capH;
+        for(var si=0;si<6;si++){
+          var streak=new THREE.Mesh(new THREE.PlaneGeometry(md.r*0.14,capH*0.55),snowMat);
+          var ang=(si/6)*Math.PI*2 + 0.35;
+          var sr=md.r*(snowBaseY/md.h)*0.55;
+          streak.position.set(Math.cos(ang)*sr, snowBaseY+capH*0.22, Math.sin(ang)*sr);
+          streak.rotation.y=ang+Math.PI/2;
+          streak.rotation.x=-0.55;
+          streak.material.side=THREE.DoubleSide;
+          g.add(streak);
+        }
+
+        g.position.set(md.x,0,md.z);
+        mapDecor.add(g);
+      }
+      for(var mi=0;mi<mDefs.length;mi++)addFujiMountain(mDefs[mi]);
+      scene.add(mapDecor);
+    }
+  }
+
+  function groundHeightAt(x,z){
+    if(currentMap!==1||!mountains||!mountains.length)return 0;
+    var best=0;
+    for(var i=0;i<mountains.length;i++){
+      var m=mountains[i];
+      var dx=x-m.x, dz=z-m.z;
+      var d=Math.sqrt(dx*dx+dz*dz);
+      if(d>=m.r)continue;
+      var h=m.h*(1 - d/m.r);
+      if(h>best)best=h;
+    }
+    return best;
+  }
+
+  function getSpawnPoints(){
+    // 30 spawnpoints far apart around the edge.
+    var pts=[];
+    var r=Math.max(18,mapHalf-18);
+    for(var i=0;i<30;i++){
+      var a=(i/30)*Math.PI*2;
+      var rr=r-(i%2?12:0);
+      pts.push({x:Math.cos(a)*rr,z:Math.sin(a)*rr});
+    }
+    // shuffle
+    for(var j=pts.length-1;j>0;j--){var k=Math.floor(Math.random()*(j+1));var tmp=pts[j];pts[j]=pts[k];pts[k]=tmp;}
+    return pts;
   }
   function updateDash(dt){
     if(!dashActive)return false;
@@ -601,7 +763,7 @@ function initTagGame(){
   function toggleView(){
     viewMode=(viewMode+1)%3;
     ensureLocalAvatar();
-    if(localAvatar)localAvatar.group.visible=viewMode>0&&playing;
+    if(localAvatar)localAvatar.group.visible=viewMode>0&&playing&&!spectator;
     if(rightHand)rightHand.visible=locked&&playing&&viewMode===0;
     crosshair.classList.toggle("on",locked&&viewMode===0);
     if(viewHint){
@@ -698,12 +860,12 @@ function initTagGame(){
     clearVoteTimer();
     var counts=[0,0,0,0,0];
     for(var id in lobbyRoster){var v=lobbyRoster[id].mapVote;if(v===0||v===1||v===2||v===3||v===4)counts[v]++;}
-    var enabled=[0]; // only Baseplate for now
+    var enabled=[0,1]; // Baseplate + Mountain
     winningMap=pickWinner(counts,enabled);
     lobbyPhase="ingame";
     broadcastLobby();
     hideLobbyPanels();
-    if(isHost)startTagMatch();
+    if(isHost){setMap(winningMap);startTagMatch();}
   }
   function showReadyLobby(fromNet){
     lobbyPhase="ready";exitLobbyInput();hideLobbyPanels();
@@ -748,7 +910,7 @@ function initTagGame(){
     else if(phase==="modevote")showModeVoteHub(true);
     else if(phase==="mapvote")showMapPickHub(true);
     else if(phase==="taghub")showServerHub(true);
-    else if(phase==="ingame"){lobbyPhase="ingame";hideLobbyPanels();if(playing)clickPlay.classList.add("show");updateDashHud();}
+    else if(phase==="ingame"){lobbyPhase="ingame";hideLobbyPanels();setMap(winningMap||0);if(playing)clickPlay.classList.add("show");updateDashHud();}
     updateModePercents(getModePercents());
     updateMapPercents(getMapPercents());
     updateModeTimerUI();
@@ -767,7 +929,7 @@ function initTagGame(){
     updateModePercents(getModePercents());
   }
   function castMapVote(idx){
-    if(lobbyPhase!=="mapvote"||idx!==0)return;
+    if(lobbyPhase!=="mapvote"||(idx!==0&&idx!==1))return;
     myMapVote=idx;if(lobbyRoster[myId])lobbyRoster[myId].mapVote=idx;
     if(isHost){broadcastLobby();}
     else send(connections[roomCode],{type:"lobbyVote",id:myId,mapVote:idx});
@@ -780,24 +942,31 @@ function initTagGame(){
     if(ids.indexOf(myId)===-1)ids.push(myId);
     var tagger=ids[Math.floor(Math.random()*ids.length)];
     match.taggerId=tagger;
-    match.roles={};match.spectators={};
+    match.roles={};match.spectators={};match.spawns={};
     for(var i=0;i<ids.length;i++){
       match.roles[ids[i]]=(ids[i]===tagger)?"tagger":"runner";
       match.spectators[ids[i]]=false;
     }
+    // 30 far-apart spawnpoints; assign unique spawn for each player.
+    var sp=getSpawnPoints();
+    for(var si=0;si<ids.length;si++){
+      var p=sp[si%sp.length];
+      match.spawns[ids[si]]={x:p.x,z:p.z};
+    }
     match.phase="rolling";
     match.rollEndsAt=Date.now()+Math.floor(ROLL_DUR*1000);
     match.endAt=Date.now()+MATCH_DUR*1000;
-    var m0={type:"match",phase:"rolling",taggerId:match.taggerId,roles:match.roles,spectators:match.spectators,rollEndsAt:match.rollEndsAt,endAt:match.endAt};
+    pruneRemotePlayersToMatch();
+    var m0={type:"match",phase:"rolling",taggerId:match.taggerId,roles:match.roles,spectators:match.spectators,spawns:match.spawns,rollEndsAt:match.rollEndsAt,endAt:match.endAt};
     broadcast(m0);applyMatchState(m0);
-    if(match.roles[myId]){myRole=match.roles[myId];spectator=false;setRoleHud();player.pos.copy(oppositeSpawn(myRole==="tagger"));}
+    if(match.roles[myId]&&match.spawns[myId]){myRole=match.roles[myId];spectator=false;setRoleHud();player.pos.set(match.spawns[myId].x,EYE,match.spawns[myId].z);}
     setTimeout(function(){
       if(match.phase!=="rolling")return;
-      var m1={type:"match",phase:"reveal",taggerId:match.taggerId,roles:match.roles,spectators:match.spectators,rollEndsAt:match.rollEndsAt,endAt:match.endAt};
+      var m1={type:"match",phase:"reveal",taggerId:match.taggerId,roles:match.roles,spectators:match.spectators,spawns:match.spawns,rollEndsAt:match.rollEndsAt,endAt:match.endAt};
       broadcast(m1);applyMatchState(m1);
       setTimeout(function(){
         if(match.phase!=="reveal")return;
-        var m2={type:"match",phase:"playing",taggerId:match.taggerId,roles:match.roles,spectators:match.spectators,endAt:match.endAt};
+        var m2={type:"match",phase:"playing",taggerId:match.taggerId,roles:match.roles,spectators:match.spectators,spawns:match.spawns,endAt:match.endAt};
         broadcast(m2);applyMatchState(m2);
       },Math.floor(START_DELAY*1000));
     },Math.floor(ROLL_DUR*1000));
@@ -836,7 +1005,9 @@ function initTagGame(){
   function send(conn,d){if(conn&&conn.open)conn.send(d);}
   function broadcast(d,skip){for(var id in connections){if(id!==skip)send(connections[id],d);}}
   function upsertRemote(d){
-    if(d.id===myId)return; addPlayerName(d.id,d.name);
+    if(d.id===myId)return;
+    if(match.phase==="playing"&&match.roles&&Object.keys(match.roles).length&&!match.roles[d.id])return;
+    addPlayerName(d.id,d.name);
     var rp=remotePlayers[d.id];
     if(!rp){var c=noobColors();var av=robloxAvatar(c.shirt,c.pants,c.skin);av.group.add(nameTag(d.name));scene.add(av.group);
       rp={avatar:av.group,parts:av.parts,smooth:{},name:d.name,target:{x:0,y:EYE,z:0,yaw:0,wp:0,mov:0,spr:0,og:1,jp:0,vy:0,lt:0},airTime:0};remotePlayers[d.id]=rp;}
@@ -857,6 +1028,7 @@ function initTagGame(){
     if(d.taggerId!==undefined)match.taggerId=d.taggerId;
     if(d.roles)match.roles=d.roles;
     if(d.spectators)match.spectators=d.spectators;
+    if(d.spawns)match.spawns=d.spawns;
     if(d.endAt!==undefined)match.endAt=d.endAt;
     if(d.rollEndsAt!==undefined)match.rollEndsAt=d.rollEndsAt;
     if(d.winEndsAt!==undefined)match.winEndsAt=d.winEndsAt;
@@ -865,8 +1037,18 @@ function initTagGame(){
     if(match.roles&&match.roles[myId])myRole=match.roles[myId];
     spectator=!!(match.spectators&&match.spectators[myId]);
     setRoleHud();
+    if(spectator&&localAvatar)localAvatar.group.visible=false;
+    // apply spawn position once at start of match
+    if(match.spawns&&match.spawns[myId]&&(match.phase==="rolling"||match.phase==="reveal"||match.phase==="playing")){
+      var sp=match.spawns[myId];
+      if(sp&&sp.x!==undefined&&sp.z!==undefined){
+        player.pos.set(sp.x,EYE,sp.z);
+        player.vel.set(0,0,0);
+        player.onGround=true;
+      }
+    }
     updateMatchTimerUI();
-    clickPlay.classList.toggle("show",playing&&!locked&&!inLobbyUi()&&!spectator);
+    clickPlay.classList.toggle("show",playing&&!locked&&!inLobbyUi());
     if(match.phase==="rolling")showRoll("ROLLING...","Picking a tagger...");
     else if(match.phase==="reveal"){var tn=(playerNames[match.taggerId]||match.taggerId||"");showRoll("TAGGER: "+tn,"Game starts in 1s");}
     else hideRoll();
@@ -948,6 +1130,7 @@ function initTagGame(){
   function startSync(){if(syncTimer)return;syncTimer=setInterval(function(){if(!playing||!multiplayer)return;var s=state();if(isHost)broadcast(s);else if(connections[roomCode])send(connections[roomCode],s);},50);}
   function initPeer(host,code){
     return new Promise(function(resolve,reject){
+      clearAllRemotePlayers();
       roomCode=code;myName=nameInput.value.trim()||"Player";
       myId=host?code:("p"+Math.random().toString(36).slice(2,9));
       isHost=host;multiplayer=true;myColors=noobColors();playerNames={};playerNames[myId]=myName;
@@ -1080,7 +1263,7 @@ function initTagGame(){
     if(dashCd>0){dashCd=Math.max(0,dashCd-dt);if(!dashActive)updateDashHud();}
     updateMatchTimerUI();
     // Safety: if we are in-game but not locked, always show click prompt.
-    if(playing&&!locked&&!inLobbyUi()&&!spectator){
+    if(playing&&!locked&&!inLobbyUi()){
       if(clickPlay)clickPlay.classList.add("show");
     }
     // Rolling name animation (everyone sees it, including runners).
@@ -1112,8 +1295,8 @@ function initTagGame(){
       updateMapTimerUI();
       if(isHost&&mapVoteEndTime&&Date.now()>=mapVoteEndTime&&!voteTimer)finishMapVote();
     }
-    if(locked&&playing&&!inLobbyUi()&&!spectator){
-      if(updateDash(dt)){
+    if(locked&&playing&&!inLobbyUi()){
+      if(!spectator&&updateDash(dt)){
         moving=true;
         camOff=updateHandAnim(dt,true,spd);
       }else{
@@ -1129,7 +1312,12 @@ function initTagGame(){
       player.vel.y+=GRAV*dt;
       player.pos.x+=player.vel.x*dt;player.pos.z+=player.vel.z*dt;player.pos.y+=player.vel.y*dt;
       clampPlayerPos();
-      if(player.pos.y<=EYE){if(!groundBefore)landTimer=LAND_DUR;player.pos.y=EYE;player.vel.y=0;player.onGround=true;}else player.onGround=false;
+      var gh=groundHeightAt(player.pos.x,player.pos.z);
+      var groundY=EYE+gh;
+      if(player.pos.y<=groundY){
+        if(!groundBefore)landTimer=LAND_DUR;
+        player.pos.y=groundY;player.vel.y=0;player.onGround=true;
+      }else player.onGround=false;
       syncMoving=moving;syncSprint=false;
       camOff=updateHandAnim(dt,moving,spd);
       }
@@ -1140,7 +1328,7 @@ function initTagGame(){
       rp.avatar.visible=!t.sp;
       if(!t.og)rp.airTime=(rp.airTime||0)+dt;else rp.airTime=0;
       animateNoobBody(rp,{onGround:!!t.og,airTime:rp.airTime||0,landT:t.lt||0,jumpPrep:t.jp||0,vy:t.vy||0,walkPhase:t.wp||0,moving:!!t.mov,sprint:!!t.spr},dt);}
-    if(localAvatar&&viewMode>0&&playing){
+    if(localAvatar&&viewMode>0&&playing&&!spectator){
       localAvatar.group.position.set(player.pos.x,player.pos.y-EYE,player.pos.z);
       localAvatar.group.rotation.y=player.yaw+(viewMode===2?Math.PI:0);
       if(localAvatar.parts.faceGroup){
