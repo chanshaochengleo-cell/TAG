@@ -286,6 +286,7 @@ function initTagGame(){
   var match={phase:"idle",taggerId:"",roles:{},spectators:{},endAt:0,rollEndsAt:0,winEndsAt:0,winnerTeam:"",winners:[]};
   var myRole="runner", spectator=false;
   var rollAnimNext=0, rollAnimPick="";
+  var winResetTimer=null;
 
   function setHud(el,on){if(!el)return;el.hidden=!on;el.classList.toggle("on",!!on);}
   function setRoleHud(){
@@ -820,9 +821,24 @@ function initTagGame(){
       if(match.phase==="rolling")showRoll("ROLLING...","Picking a tagger...");
       else if(match.phase==="reveal"){var tn=(playerNames[match.taggerId]||match.taggerId||"");showRoll("TAGGER: "+tn,"Game starts in 1s");}
       else hideRoll();
-      if(match.phase==="ended")showWin(match.winnerTeam,(match.winners||[]).map(function(id){return playerNames[id]||id;}));
-      else hideWin();
-      if(match.phase==="reset")resetToMenu();
+      if(match.phase==="ended"){
+        showWin(match.winnerTeam,(match.winners||[]).map(function(id){return playerNames[id]||id;}));
+        // Client-side fallback: if reset broadcast is missed, still return to menu at winEndsAt.
+        if(winResetTimer){clearTimeout(winResetTimer);winResetTimer=null;}
+        if(match.winEndsAt){
+          var ms=Math.max(0,match.winEndsAt-Date.now());
+          winResetTimer=setTimeout(function(){
+            if(match.phase==="ended")resetToMenu();
+          },ms+50);
+        }
+      }else{
+        hideWin();
+        if(winResetTimer){clearTimeout(winResetTimer);winResetTimer=null;}
+      }
+      if(match.phase==="reset"){
+        if(winResetTimer){clearTimeout(winResetTimer);winResetTimer=null;}
+        resetToMenu();
+      }
       return;
     }
     if(d.type==="lobby"){applyLobby(d);return;}
