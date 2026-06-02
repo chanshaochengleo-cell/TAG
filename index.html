@@ -59,6 +59,12 @@ html.tag-framed #frameWarn[hidden]{display:flex!important}
 #dashHud.on{display:block}
 #roleHud{position:fixed;top:12px;left:50%;transform:translateX(-50%);z-index:9;pointer-events:none;background:rgba(0,0,0,0.45);color:#fff;padding:4px 10px;border-radius:999px;font-size:12px;letter-spacing:0.06em;display:none}
 #roleHud.on{display:block}
+#matchTimer{position:fixed;top:44px;right:12px;z-index:9;pointer-events:none;background:rgba(0,0,0,0.55);color:#fff;padding:6px 12px;border-radius:8px;font-size:15px;font-weight:800;font-variant-numeric:tabular-nums;letter-spacing:0.06em;display:none}
+#matchTimer.on{display:block}
+.panel .nameRow{display:flex;gap:0.4rem;align-items:stretch;margin:0.35rem 0}
+.panel .nameRow input{flex:1;margin:0}
+.panel .btn-save{flex:0 0 auto;width:auto;padding:0.55rem 0.7rem;margin:0;font-size:0.82rem;white-space:nowrap;background:#555;border:none;border-radius:6px;color:#fff;font-weight:700;cursor:pointer}
+.panel .btn-save:hover{filter:brightness(1.08)}
 #rollHud{position:fixed;inset:0;z-index:17;display:none;align-items:center;justify-content:center;pointer-events:none}
 #rollHud.on{display:flex}
 #rollHud .box{background:rgba(0,0,0,0.75);color:#fff;border-radius:16px;padding:18px 22px;min-width:min(520px,92vw);text-align:center;box-shadow:0 10px 48px rgba(0,0,0,0.35)}
@@ -121,6 +127,7 @@ html.tag-framed #frameWarn[hidden]{display:flex!important}
 <div id="roomHud"></div>
 <div id="crosshair"></div>
 <div id="roleHud"></div>
+<div id="matchTimer" hidden>5:00</div>
 <div id="viewHint">V = cycle view: 1st person / 3rd back / 3rd front</div>
 <div id="dashHud"></div>
 <div id="rollHud" hidden><div class="box"><div class="big" id="rollBig">ROLLING...</div><div class="sub" id="rollSub"></div></div></div>
@@ -188,7 +195,10 @@ html.tag-framed #frameWarn[hidden]{display:flex!important}
   <div class="panel">
     <h1>Party Grounds</h1>
     <p id="menuSubtext">Loading...</p>
-    <input id="nameInput" placeholder="Your username" maxlength="12">
+    <div class="nameRow">
+      <input id="nameInput" placeholder="Your username" maxlength="12">
+      <button type="button" class="btn-save" id="saveNameBtn">Save name</button>
+    </div>
     <button type="button" class="btn btn-blue" id="playSolo">Play Now (Solo)</button>
     <hr style="margin:0.8rem 0;border:none;border-top:1px solid #ddd">
     <button type="button" class="btn btn-blue" id="createBtn">Create Room</button>
@@ -265,9 +275,30 @@ function initTagGame(){
   var othersListEl=document.getElementById("othersList");
   var roomHud=document.getElementById("roomHud");
   var nameInput=document.getElementById("nameInput");
+  var saveNameBtn=document.getElementById("saveNameBtn");
+  var matchTimerEl=document.getElementById("matchTimer");
   var menuStatus=document.getElementById("menuStatus");
+  var NAME_SAVE_KEY="partyGroundsPlayerName";
   function setStatus(t){menuStatus.textContent=t;}
-  nameInput.value="Player"+Math.floor(Math.random()*900+100);
+  function loadSavedName(){
+    try{
+      var s=localStorage.getItem(NAME_SAVE_KEY);
+      if(s&&s.trim()){nameInput.value=s.trim().slice(0,12);return;}
+    }catch(e){}
+    nameInput.value="Player"+Math.floor(Math.random()*900+100);
+  }
+  function savePlayerName(){
+    var n=nameInput.value.trim();
+    if(!n){setStatus("Enter a name first");return;}
+    n=n.slice(0,12);
+    try{
+      localStorage.setItem(NAME_SAVE_KEY,n);
+      nameInput.value=n;
+      setStatus("Name saved!");
+    }catch(e){setStatus("Could not save name");}
+  }
+  loadSavedName();
+  if(saveNameBtn)saveNameBtn.addEventListener("click",savePlayerName);
   updateMenuEnv();
   if(canMultiplayer())setStatus("多人模式已就緒");
 
@@ -303,6 +334,19 @@ function initTagGame(){
     setHud(winHud,true);
   }
   function hideWin(){setHud(winHud,false);}
+  function formatMatchTime(ms){
+    var s=Math.max(0,Math.ceil(ms/1000));
+    var m=Math.floor(s/60),sec=s%60;
+    return m+":"+(sec<10?"0":"")+sec;
+  }
+  function updateMatchTimerUI(){
+    if(!matchTimerEl)return;
+    var show=playing&&multiplayer&&match.phase==="playing"&&match.endAt&&!inLobbyUi();
+    if(!show){matchTimerEl.hidden=true;matchTimerEl.classList.remove("on");return;}
+    matchTimerEl.hidden=false;
+    matchTimerEl.classList.add("on");
+    matchTimerEl.textContent=formatMatchTime(match.endAt-Date.now());
+  }
   function oppositeSpawn(isTagger){
     var m=Math.max(12,HALF-12);
     var x=isTagger?-m:m;
@@ -312,6 +356,7 @@ function initTagGame(){
     hideRoll();hideWin();
     match={phase:"idle",taggerId:"",roles:{},spectators:{},endAt:0,rollEndsAt:0,winEndsAt:0,winnerTeam:"",winners:[]};
     spectator=false;myRole="runner";setRoleHud();
+    updateMatchTimerUI();
     playing=false;locked=false;
     if(document.pointerLockElement===canvas)document.exitPointerLock();
     clickPlay.classList.remove("show");
@@ -743,16 +788,17 @@ function initTagGame(){
     match.phase="rolling";
     match.rollEndsAt=Date.now()+Math.floor(ROLL_DUR*1000);
     match.endAt=Date.now()+MATCH_DUR*1000;
-    broadcast({type:"match",phase:"rolling",taggerId:match.taggerId,roles:match.roles,spectators:match.spectators,rollEndsAt:match.rollEndsAt,endAt:match.endAt});
+    var m0={type:"match",phase:"rolling",taggerId:match.taggerId,roles:match.roles,spectators:match.spectators,rollEndsAt:match.rollEndsAt,endAt:match.endAt};
+    broadcast(m0);applyMatchState(m0);
     if(match.roles[myId]){myRole=match.roles[myId];spectator=false;setRoleHud();player.pos.copy(oppositeSpawn(myRole==="tagger"));}
     setTimeout(function(){
       if(match.phase!=="rolling")return;
-      match.phase="reveal";
-      broadcast({type:"match",phase:"reveal",taggerId:match.taggerId,roles:match.roles,spectators:match.spectators,rollEndsAt:match.rollEndsAt,endAt:match.endAt});
+      var m1={type:"match",phase:"reveal",taggerId:match.taggerId,roles:match.roles,spectators:match.spectators,rollEndsAt:match.rollEndsAt,endAt:match.endAt};
+      broadcast(m1);applyMatchState(m1);
       setTimeout(function(){
         if(match.phase!=="reveal")return;
-        match.phase="playing";
-        broadcast({type:"match",phase:"playing",taggerId:match.taggerId,roles:match.roles,spectators:match.spectators,endAt:match.endAt});
+        var m2={type:"match",phase:"playing",taggerId:match.taggerId,roles:match.roles,spectators:match.spectators,endAt:match.endAt};
+        broadcast(m2);applyMatchState(m2);
       },Math.floor(START_DELAY*1000));
     },Math.floor(ROLL_DUR*1000));
   }
@@ -766,8 +812,12 @@ function initTagGame(){
     }
     match.winners=winners;
     match.winEndsAt=Date.now()+5000;
-    broadcast({type:"match",phase:"ended",winnerTeam:team,winners:winners,winEndsAt:match.winEndsAt,roles:match.roles,spectators:match.spectators});
-    setTimeout(function(){broadcast({type:"match",phase:"reset"});},5000);
+    var msg={type:"match",phase:"ended",winnerTeam:team,winners:winners,winEndsAt:match.winEndsAt,roles:match.roles,spectators:match.spectators};
+    broadcast(msg);applyMatchState(msg);
+    setTimeout(function(){
+      var rm={type:"match",phase:"reset"};
+      broadcast(rm);applyMatchState(rm);
+    },5000);
   }
   function startPlaying(){
     if(!scene||!camera||!renderer){setStatus("Game engine not ready - refresh page");return;}
@@ -802,45 +852,44 @@ function initTagGame(){
     if(d.sp!==undefined)rp.target.sp=d.sp?1:0;
     updatePlayerList();
   }
-  function handleData(fromId,d){
-    if(d.type==="match"){
-      if(d.phase)match.phase=d.phase;
-      if(d.taggerId!==undefined)match.taggerId=d.taggerId;
-      if(d.roles)match.roles=d.roles;
-      if(d.spectators)match.spectators=d.spectators;
-      if(d.endAt!==undefined)match.endAt=d.endAt;
-      if(d.rollEndsAt!==undefined)match.rollEndsAt=d.rollEndsAt;
-      if(d.winEndsAt!==undefined)match.winEndsAt=d.winEndsAt;
-      if(d.winnerTeam!==undefined)match.winnerTeam=d.winnerTeam;
-      if(d.winners)match.winners=d.winners;
-      if(match.roles&&match.roles[myId])myRole=match.roles[myId];
-      spectator=!!(match.spectators&&match.spectators[myId]);
-      setRoleHud();
-      // Ensure player can click to lock mouse
-      clickPlay.classList.toggle("show",playing&&!locked&&!inLobbyUi()&&!spectator);
-      if(match.phase==="rolling")showRoll("ROLLING...","Picking a tagger...");
-      else if(match.phase==="reveal"){var tn=(playerNames[match.taggerId]||match.taggerId||"");showRoll("TAGGER: "+tn,"Game starts in 1s");}
-      else hideRoll();
-      if(match.phase==="ended"){
-        showWin(match.winnerTeam,(match.winners||[]).map(function(id){return playerNames[id]||id;}));
-        // Client-side fallback: if reset broadcast is missed, still return to menu at winEndsAt.
-        if(winResetTimer){clearTimeout(winResetTimer);winResetTimer=null;}
-        if(match.winEndsAt){
-          var ms=Math.max(0,match.winEndsAt-Date.now());
-          winResetTimer=setTimeout(function(){
-            if(match.phase==="ended")resetToMenu();
-          },ms+50);
-        }
-      }else{
-        hideWin();
-        if(winResetTimer){clearTimeout(winResetTimer);winResetTimer=null;}
+  function applyMatchState(d){
+    if(d.phase)match.phase=d.phase;
+    if(d.taggerId!==undefined)match.taggerId=d.taggerId;
+    if(d.roles)match.roles=d.roles;
+    if(d.spectators)match.spectators=d.spectators;
+    if(d.endAt!==undefined)match.endAt=d.endAt;
+    if(d.rollEndsAt!==undefined)match.rollEndsAt=d.rollEndsAt;
+    if(d.winEndsAt!==undefined)match.winEndsAt=d.winEndsAt;
+    if(d.winnerTeam!==undefined)match.winnerTeam=d.winnerTeam;
+    if(d.winners)match.winners=d.winners;
+    if(match.roles&&match.roles[myId])myRole=match.roles[myId];
+    spectator=!!(match.spectators&&match.spectators[myId]);
+    setRoleHud();
+    updateMatchTimerUI();
+    clickPlay.classList.toggle("show",playing&&!locked&&!inLobbyUi()&&!spectator);
+    if(match.phase==="rolling")showRoll("ROLLING...","Picking a tagger...");
+    else if(match.phase==="reveal"){var tn=(playerNames[match.taggerId]||match.taggerId||"");showRoll("TAGGER: "+tn,"Game starts in 1s");}
+    else hideRoll();
+    if(match.phase==="ended"){
+      showWin(match.winnerTeam,(match.winners||[]).map(function(id){return playerNames[id]||id;}));
+      if(winResetTimer){clearTimeout(winResetTimer);winResetTimer=null;}
+      if(match.winEndsAt){
+        var ms=Math.max(0,match.winEndsAt-Date.now());
+        winResetTimer=setTimeout(function(){
+          if(match.phase==="ended")resetToMenu();
+        },ms+50);
       }
-      if(match.phase==="reset"){
-        if(winResetTimer){clearTimeout(winResetTimer);winResetTimer=null;}
-        resetToMenu();
-      }
-      return;
+    }else{
+      hideWin();
+      if(winResetTimer){clearTimeout(winResetTimer);winResetTimer=null;}
     }
+    if(match.phase==="reset"){
+      if(winResetTimer){clearTimeout(winResetTimer);winResetTimer=null;}
+      resetToMenu();
+    }
+  }
+  function handleData(fromId,d){
+    if(d.type==="match"){applyMatchState(d);return;}
     if(d.type==="lobby"){applyLobby(d);return;}
     if(d.type==="lobbyHello"&&isHost){
       if(roomLocked){try{connections[fromId].close();}catch(e){}return;}
@@ -870,7 +919,8 @@ function initTagGame(){
       if(!tagP||!tgtP)return;
       if(tagP.distanceTo(tgtP)>TAG_WORLD_RANGE)return;
       match.spectators[tid]=true;
-      broadcast({type:"match",phase:"playing",spectators:match.spectators});
+      var sm={type:"match",phase:"playing",spectators:match.spectators};
+      broadcast(sm);applyMatchState(sm);
       var alive=0;for(var id in match.roles){if(match.roles[id]==="runner"&&!match.spectators[id])alive++;}
       if(alive<=0)endMatch("tagger");
       return;
@@ -1028,6 +1078,7 @@ function initTagGame(){
     var dt=Math.min((now-last)/1000,0.05);last=now;
     var moving=false,spd=WALK,camOff=0,groundBefore=player.onGround;
     if(dashCd>0){dashCd=Math.max(0,dashCd-dt);if(!dashActive)updateDashHud();}
+    updateMatchTimerUI();
     // Safety: if we are in-game but not locked, always show click prompt.
     if(playing&&!locked&&!inLobbyUi()&&!spectator){
       if(clickPlay)clickPlay.classList.add("show");
