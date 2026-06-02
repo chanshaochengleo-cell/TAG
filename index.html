@@ -285,6 +285,7 @@ function initTagGame(){
   var MATCH_DUR=300, ROLL_DUR=2.5, START_DELAY=1, TAG_CLICK_PX=100, TAG_WORLD_RANGE=7;
   var match={phase:"idle",taggerId:"",roles:{},spectators:{},endAt:0,rollEndsAt:0,winEndsAt:0,winnerTeam:"",winners:[]};
   var myRole="runner", spectator=false;
+  var rollAnimNext=0, rollAnimPick="";
 
   function setHud(el,on){if(!el)return;el.hidden=!on;el.classList.toggle("on",!!on);}
   function setRoleHud(){
@@ -420,7 +421,10 @@ function initTagGame(){
   window.addEventListener("mousedown",function(e){
     if(!playing||!multiplayer||match.phase!=="playing"||spectator)return;
     if(myRole!=="tagger")return;
-    var mx=e.clientX,my=e.clientY,best=null,bestD=1e9;
+    // NOTE: under Pointer Lock, clientX/clientY may be unreliable; use screen center (crosshair).
+    var mx=locked?window.innerWidth/2:e.clientX;
+    var my=locked?window.innerHeight/2:e.clientY;
+    var best=null,bestD=1e9;
     for(var id in remotePlayers){
       var rp=remotePlayers[id],t=rp.target;
       if(t.sp)continue;
@@ -1011,6 +1015,22 @@ function initTagGame(){
     // Safety: if we are in-game but not locked, always show click prompt.
     if(playing&&!locked&&!inLobbyUi()&&!spectator){
       if(clickPlay)clickPlay.classList.add("show");
+    }
+    // Rolling name animation (everyone sees it, including runners).
+    if(multiplayer&&match.phase==="rolling"&&rollBig){
+      if(now>=rollAnimNext){
+        rollAnimNext=now+90;
+        var ids=[];
+        for(var rid in match.roles)ids.push(rid);
+        if(!ids.length){for(var pid in playerNames)ids.push(pid);}
+        if(ids.length){
+          var pick=ids[Math.floor(Math.random()*ids.length)];
+          var nm=playerNames[pick]||pick;
+          rollAnimPick=nm;
+          rollBig.textContent=nm;
+          if(rollSub)rollSub.textContent="ROLLING...";
+        }
+      }
     }
     if(isHost&&match.phase==="playing"&&match.endAt&&Date.now()>=match.endAt){
       var alive=0;for(var mid in match.roles){if(match.roles[mid]==="runner"&&!match.spectators[mid])alive++;}
