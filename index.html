@@ -57,6 +57,18 @@ html.tag-framed #frameWarn[hidden]{display:flex!important}
 #viewHint.on{display:block}
 #dashHud{position:fixed;bottom:44px;left:50%;transform:translateX(-50%);font-size:12px;color:#fff;background:rgba(0,0,0,0.55);padding:5px 12px;border-radius:6px;z-index:6;pointer-events:none;display:none}
 #dashHud.on{display:block}
+#roleHud{position:fixed;top:12px;left:50%;transform:translateX(-50%);z-index:9;pointer-events:none;background:rgba(0,0,0,0.45);color:#fff;padding:4px 10px;border-radius:999px;font-size:12px;letter-spacing:0.06em;display:none}
+#roleHud.on{display:block}
+#rollHud{position:fixed;inset:0;z-index:17;display:none;align-items:center;justify-content:center;pointer-events:none}
+#rollHud.on{display:flex}
+#rollHud .box{background:rgba(0,0,0,0.75);color:#fff;border-radius:16px;padding:18px 22px;min-width:min(520px,92vw);text-align:center;box-shadow:0 10px 48px rgba(0,0,0,0.35)}
+#rollHud .big{font-size:clamp(1.4rem,4vw,2.2rem);font-weight:900;letter-spacing:0.14em}
+#rollHud .sub{margin-top:8px;font-size:14px;opacity:0.9}
+#winHud{position:fixed;inset:0;z-index:18;display:none;align-items:flex-start;justify-content:center;padding-top:7vh;pointer-events:none}
+#winHud.on{display:flex}
+#winHud .box{background:rgba(255,255,255,0.92);border:3px solid #0066cc;border-radius:16px;padding:18px 22px;min-width:min(640px,92vw);text-align:center;box-shadow:0 10px 48px rgba(0,0,0,0.18)}
+#winHud .title{font-size:clamp(2rem,5vw,3rem);font-weight:1000;color:#e2231a;letter-spacing:0.08em}
+#winHud .names{margin-top:10px;font-size:14px;color:#222;line-height:1.6}
 #serverHub{position:fixed;inset:0;z-index:15;display:none;align-items:center;justify-content:center;padding:2rem;pointer-events:auto}
 #serverHub.on{display:flex}
 #serverHub::before{content:"";position:absolute;inset:0;backdrop-filter:blur(22px);-webkit-backdrop-filter:blur(22px);background:rgba(200,220,240,0.35)}
@@ -76,10 +88,16 @@ html.tag-framed #frameWarn[hidden]{display:flex!important}
 #mapVoteHub{position:fixed;inset:0;z-index:15;display:none;align-items:center;justify-content:center;padding:2rem;pointer-events:auto}
 #mapVoteHub.on{display:flex}
 #mapVoteHub::before{content:"";position:absolute;inset:0;backdrop-filter:blur(22px);-webkit-backdrop-filter:blur(22px);background:rgba(200,220,240,0.35)}
+#mapPickHub{position:fixed;inset:0;z-index:15;display:none;align-items:center;justify-content:center;padding:2rem;pointer-events:auto}
+#mapPickHub.on{display:flex}
+#mapPickHub::before{content:"";position:absolute;inset:0;backdrop-filter:blur(22px);-webkit-backdrop-filter:blur(22px);background:rgba(200,220,240,0.35)}
 .mapVoteTitle{font-size:1rem;font-weight:700;color:#333;margin-bottom:0.35rem}
 .mapVotePct{font-size:clamp(1.2rem,3vw,1.75rem);font-weight:800;color:#0066cc;margin-top:auto;margin-bottom:0.35rem}
 .mapVoteTimer{position:relative;z-index:2;width:100%;text-align:center;color:#fff;font-size:1.15rem;font-weight:700;margin-bottom:1rem;text-shadow:0 2px 8px rgba(0,0,0,0.35)}
 .mapVoteWrap{position:relative;z-index:1;display:flex;flex-direction:column;align-items:center;width:min(92vw,960px)}
+.pickWrap{position:relative;z-index:1;display:flex;flex-direction:column;align-items:center;width:min(92vw,1100px)}
+.pickGrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:1rem;width:100%}
+.pickCard{min-height:170px}
 .serverHubCard.selected{border-color:#00a650;box-shadow:0 0 0 3px rgba(0,166,80,0.35)}
 </style>
 </head>
@@ -102,8 +120,11 @@ html.tag-framed #frameWarn[hidden]{display:flex!important}
 <div id="playerList"><h3>Players</h3><div class="you" id="youName"></div><div id="othersList"></div></div>
 <div id="roomHud"></div>
 <div id="crosshair"></div>
+<div id="roleHud"></div>
 <div id="viewHint">V = cycle view: 1st person / 3rd back / 3rd front</div>
 <div id="dashHud"></div>
+<div id="rollHud" hidden><div class="box"><div class="big" id="rollBig">ROLLING...</div><div class="sub" id="rollSub"></div></div></div>
+<div id="winHud" hidden><div class="box"><div class="title" id="winTitle">WINS!</div><div class="names" id="winNames"></div></div></div>
 <div id="readyLobby" hidden>
   <p class="readyLobbyCount" id="readyLobbyList">0 joined</p>
   <button type="button" class="readyLobbyBtn" id="readyLobbyBtn">Ready</button>
@@ -111,21 +132,48 @@ html.tag-framed #frameWarn[hidden]{display:flex!important}
 </div>
 <div id="mapVoteHub" hidden>
   <div class="mapVoteWrap">
-    <p class="mapVoteTimer" id="mapVoteTimer">Vote ends in 5s</p>
+    <p class="mapVoteTimer" id="mapVoteTimer">Mode locks in 5s</p>
     <div class="serverHubCards">
     <button type="button" class="serverHubCard" id="mapVote0">
-      <span class="mapVoteTitle">TAG Map</span>
+      <span class="mapVoteTitle">TAG</span>
       <span class="mapVotePct" id="mapPct0">0%</span>
     </button>
     <button type="button" class="serverHubCard muted" id="mapVote1" disabled>
-      <span class="mapVoteTitle">Map 2</span>
+      <span class="mapVoteTitle">Mode 2</span>
       <span class="mapVotePct" id="mapPct1">0%</span>
     </button>
     <button type="button" class="serverHubCard muted" id="mapVote2" disabled>
-      <span class="mapVoteTitle">Map 3</span>
+      <span class="mapVoteTitle">Mode 3</span>
       <span class="mapVotePct" id="mapPct2">0%</span>
     </button>
   </div>
+  </div>
+</div>
+<div id="mapPickHub" hidden>
+  <div class="pickWrap">
+    <p class="mapVoteTimer" id="mapPickTimer">Map locks in 5s</p>
+    <div class="pickGrid">
+      <button type="button" class="serverHubCard pickCard" id="mapPick0">
+        <span class="mapVoteTitle">Baseplate</span>
+        <span class="mapVotePct" id="mapPickPct0">0%</span>
+      </button>
+      <button type="button" class="serverHubCard muted pickCard" id="mapPick1" disabled>
+        <span class="mapVoteTitle">Mountain</span>
+        <span class="mapVotePct" id="mapPickPct1">0%</span>
+      </button>
+      <button type="button" class="serverHubCard muted pickCard" id="mapPick2" disabled>
+        <span class="mapVoteTitle">Forest</span>
+        <span class="mapVotePct" id="mapPickPct2">0%</span>
+      </button>
+      <button type="button" class="serverHubCard muted pickCard" id="mapPick3" disabled>
+        <span class="mapVoteTitle">City</span>
+        <span class="mapVotePct" id="mapPickPct3">0%</span>
+      </button>
+      <button type="button" class="serverHubCard muted pickCard" id="mapPick4" disabled>
+        <span class="mapVoteTitle">Playground</span>
+        <span class="mapVotePct" id="mapPickPct4">0%</span>
+      </button>
+    </div>
   </div>
 </div>
 <div id="serverHub" hidden>
@@ -188,21 +236,19 @@ function initTagGame(){
     var sub=document.getElementById("menuSubtext"),tip=document.getElementById("fileTip");
     var online=canMultiplayer();
     if(sub){
-      if(online)sub.textContent="已連上 GitHub Pages。按 Create Room 開房，或 Join Room 輸入代碼加入。";
-      else if(window.__TAG_FILE)sub.textContent="本機檔案：可單人遊玩。多人請用 GitHub Pages 的 https 網址開啟。";
-      else sub.textContent="請用 GitHub Pages（https）開啟此遊戲以使用多人模式。";
+      if(online)sub.textContent="多人模式已就緒：Create Room / Join Room";
+      else sub.textContent="多人需要 https（安全連線）。你現在是："+location.protocol+"//"+location.host;
     }
-    if(tip)tip.hidden=!!online;
-  }
-  if(window.__TAG_FILE){
-    var tip=document.getElementById("fileTip");
-    if(tip&&!canMultiplayer())tip.hidden=false;
+    if(tip)tip.hidden=true;
   }
   if(typeof THREE==="undefined"){alert("Game failed to load: THREE.js missing");return;}
   var EYE=1.75, MAP=400, HALF=MAP/2-2, GRAV=-24, JUMP=9, WALK=8;
   var DASH_CD=3, DASH_PX=500, DASH_DUR=0.28, dashCd=0, dashActive=null;
   var lobbyPhase="none", roomLocked=false, lobbyRoster={}, myLobbyVote=null;
-  var MAP_VOTE_SEC=5, mapVoteEndTime=0, mapVoteTimer=null, winningMap=0;
+  var MODE_VOTE_SEC=5, MAP_VOTE_SEC=5;
+  var modeVoteEndTime=0, mapVoteEndTime=0;
+  var voteTimer=null;
+  var winningMode=0, winningMap=0;
   var NOOB={shirt:0x0D69AC,pants:0xA4BD47,skin:0xF5CD30};
   var canvas=document.getElementById("gameCanvas");
   var menu=document.getElementById("menu");
@@ -210,6 +256,9 @@ function initTagGame(){
   var crosshair=document.getElementById("crosshair");
   var viewHint=document.getElementById("viewHint");
   var dashHud=document.getElementById("dashHud");
+  var roleHud=document.getElementById("roleHud");
+  var rollHud=document.getElementById("rollHud"), rollBig=document.getElementById("rollBig"), rollSub=document.getElementById("rollSub");
+  var winHud=document.getElementById("winHud"), winTitle=document.getElementById("winTitle"), winNames=document.getElementById("winNames");
   var serverHub=document.getElementById("serverHub");
   var playerListEl=document.getElementById("playerList");
   var youNameEl=document.getElementById("youName");
@@ -233,6 +282,44 @@ function initTagGame(){
   var connections={},remotePlayers={}, syncTimer=null;
   var scene,camera,renderer,rightHand,localAvatar=null;
   var TP_DIST=5.5, TP_HEIGHT=1.1;
+  var MATCH_DUR=300, ROLL_DUR=2.5, START_DELAY=1, TAG_CLICK_PX=100, TAG_WORLD_RANGE=7;
+  var match={phase:"idle",taggerId:"",roles:{},spectators:{},endAt:0,rollEndsAt:0,winEndsAt:0,winnerTeam:"",winners:[]};
+  var myRole="runner", spectator=false;
+
+  function setHud(el,on){if(!el)return;el.hidden=!on;el.classList.toggle("on",!!on);}
+  function setRoleHud(){
+    if(!roleHud)return;
+    if(!multiplayer||match.phase==="idle"){setHud(roleHud,false);return;}
+    setHud(roleHud,true);
+    roleHud.textContent=spectator?"SPECTATOR":("You are "+(myRole==="tagger"?"TAGGER":"RUNNER"));
+  }
+  function showRoll(text,sub){if(rollBig)rollBig.textContent=text||"ROLLING...";if(rollSub)rollSub.textContent=sub||"";setHud(rollHud,true);}
+  function hideRoll(){setHud(rollHud,false);}
+  function showWin(team,names){
+    if(winTitle)winTitle.textContent=(team==="tagger"?"TAGGER":"RUNNERS")+" WINS!";
+    if(winNames)winNames.textContent=names&&names.length?("Winners: "+names.join(", ")):"";
+    setHud(winHud,true);
+  }
+  function hideWin(){setHud(winHud,false);}
+  function oppositeSpawn(isTagger){
+    var m=Math.max(12,HALF-12);
+    var x=isTagger?-m:m;
+    return new THREE.Vector3(x,EYE,0);
+  }
+  function resetToMenu(){
+    hideRoll();hideWin();
+    match={phase:"idle",taggerId:"",roles:{},spectators:{},endAt:0,rollEndsAt:0,winEndsAt:0,winnerTeam:"",winners:[]};
+    spectator=false;myRole="runner";setRoleHud();
+    playing=false;locked=false;
+    if(document.pointerLockElement===canvas)document.exitPointerLock();
+    clickPlay.classList.remove("show");
+    menu.style.display="";
+    document.getElementById("createBtn").style.display="";
+    document.getElementById("joinBtn").style.display="";
+    document.getElementById("roomInput").style.display="";
+    document.getElementById("hostPanel").hidden=true;
+    multiplayer=false;isHost=false;roomLocked=false;
+  }
 
   document.getElementById("playSolo").addEventListener("click",function(){
     myName=nameInput.value.trim()||"Player";
@@ -256,7 +343,8 @@ function initTagGame(){
   });
   document.getElementById("startBtn").addEventListener("click",function(){startPlaying();startSync();enterMultiplayerLobby();});
   document.getElementById("readyLobbyBtn").addEventListener("click",onReadyLobbyBtn);
-  document.getElementById("mapVote0").addEventListener("click",function(){castMapVote(0);});
+  document.getElementById("mapVote0").addEventListener("click",function(){castModeVote(0);});
+  document.getElementById("mapPick0").addEventListener("click",function(){castMapVote(0);});
   document.getElementById("hubCardTag").addEventListener("click",function(){closeServerHub();});
   document.getElementById("hubCard2").addEventListener("click",function(){});
   document.getElementById("hubCard3").addEventListener("click",function(){});
@@ -300,11 +388,17 @@ function initTagGame(){
   }
 
   clickPlay.addEventListener("click",function(){canvas.requestPointerLock();});
+  // If overlay isn't showing, still allow click-to-lock.
+  window.addEventListener("mousedown",function(){
+    if(playing&&!locked&&!inLobbyUi()&&!spectator){
+      try{canvas.requestPointerLock();}catch(e){}
+    }
+  },true);
   document.addEventListener("pointerlockchange",function(){
     locked=document.pointerLockElement===canvas;
-    clickPlay.classList.toggle("show",playing&&!locked&&!inLobbyUi());
+    clickPlay.classList.toggle("show",playing&&!locked&&!inLobbyUi()&&!spectator);
     crosshair.classList.toggle("on",locked&&viewMode===0);
-    if(rightHand)rightHand.visible=locked&&playing&&viewMode===0&&!inLobbyUi();
+    if(rightHand)rightHand.visible=locked&&playing&&viewMode===0&&!inLobbyUi()&&!spectator;
     updateDashHud();
   });
   document.addEventListener("mousemove",function(e){
@@ -323,6 +417,27 @@ function initTagGame(){
     }
   },true);
   window.addEventListener("keyup",function(e){keys[e.code]=false;});
+  window.addEventListener("mousedown",function(e){
+    if(!playing||!multiplayer||match.phase!=="playing"||spectator)return;
+    if(myRole!=="tagger")return;
+    var mx=e.clientX,my=e.clientY,best=null,bestD=1e9;
+    for(var id in remotePlayers){
+      var rp=remotePlayers[id],t=rp.target;
+      if(t.sp)continue;
+      if(t.role!=="runner")continue;
+      var v=rp.avatar.position.clone();v.y=EYE;
+      var p=v.project(camera);
+      if(p.z<-1||p.z>1)continue;
+      var sx=(p.x*0.5+0.5)*window.innerWidth;
+      var sy=(-p.y*0.5+0.5)*window.innerHeight;
+      var dx=sx-mx,dy=sy-my,dd=Math.sqrt(dx*dx+dy*dy);
+      if(dd<bestD){bestD=dd;best=id;}
+    }
+    if(best&&bestD<=TAG_CLICK_PX){
+      if(isHost)handleData(myId,{type:"tagAttempt",target:best});
+      else if(connections[roomCode])send(connections[roomCode],{type:"tagAttempt",target:best});
+    }
+  },true);
   window.addEventListener("resize",function(){
     camera.aspect=window.innerWidth/window.innerHeight;camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth,window.innerHeight,false);
@@ -446,14 +561,18 @@ function initTagGame(){
       clearTimeout(toggleView._t);toggleView._t=setTimeout(function(){viewHint.classList.remove("on");},2200);
     }
   }
-  function inLobbyUi(){return lobbyPhase==="ready"||lobbyPhase==="mapvote"||lobbyPhase==="taghub";}
+  function inLobbyUi(){return lobbyPhase==="ready"||lobbyPhase==="modevote"||lobbyPhase==="mapvote"||lobbyPhase==="taghub";}
   function exitLobbyInput(){for(var k in keys)keys[k]=false;if(document.pointerLockElement===canvas)document.exitPointerLock();clickPlay.classList.remove("show");locked=false;}
-  function hideLobbyPanels(){var ids=["readyLobby","mapVoteHub","serverHub"];for(var i=0;i<ids.length;i++){var el=document.getElementById(ids[i]);if(el){el.hidden=true;el.classList.remove("on");}}}
+  function hideLobbyPanels(){var ids=["readyLobby","mapVoteHub","mapPickHub","serverHub"];for(var i=0;i<ids.length;i++){var el=document.getElementById(ids[i]);if(el){el.hidden=true;el.classList.remove("on");}}}
   function rosterNames(){var a=[];for(var id in lobbyRoster)a.push(lobbyRoster[id].name);return a;}
-  function getVotePercents(){var c=[0,0,0],n=0;for(var id in lobbyRoster){var v=lobbyRoster[id].vote;if(v===0||v===1||v===2){c[v]++;n++;}}return c.map(function(x){return n?Math.round(x/n*100):0;});}
-  function buildLobbyMsg(){return{type:"lobby",phase:lobbyPhase,locked:roomLocked,roster:lobbyRoster,mapVoteEndTime:mapVoteEndTime,winningMap:winningMap};}
+  function getModePercents(){var c=[0,0,0],n=0;for(var id in lobbyRoster){var v=lobbyRoster[id].modeVote;if(v===0||v===1||v===2){c[v]++;n++;}}return c.map(function(x){return n?Math.round(x/n*100):0;});}
+  function getMapPercents(){var c=[0,0,0,0,0],n=0;for(var id in lobbyRoster){var v=lobbyRoster[id].mapVote;if(v===0||v===1||v===2||v===3||v===4){c[v]++;n++;}}return c.map(function(x){return n?Math.round(x/n*100):0;});}
+  function buildLobbyMsg(){return{type:"lobby",phase:lobbyPhase,locked:roomLocked,roster:lobbyRoster,modeVoteEndTime:modeVoteEndTime,mapVoteEndTime:mapVoteEndTime,winningMode:winningMode,winningMap:winningMap};}
   function broadcastLobby(skip){if(isHost)broadcast(buildLobbyMsg(),skip);}
-  function initLobbyRoster(){lobbyRoster={};lobbyRoster[myId]={name:myName,ready:false,vote:null};}
+  function initLobbyRoster(){
+    if(!lobbyRoster)lobbyRoster={};
+    lobbyRoster[myId]={name:myName,ready:false,modeVote:null,mapVote:null};
+  }
   function updateReadyLobbyUI(){
     var list=document.getElementById("readyLobbyList"),btn=document.getElementById("readyLobbyBtn"),wait=document.getElementById("readyLobbyWait");
     var names=rosterNames();
@@ -462,51 +581,101 @@ function initTagGame(){
     if(btn){btn.style.display=hostReady?"":"none";btn.disabled=roomLocked;}
     if(wait){wait.hidden=hostReady;wait.textContent="Waiting for host...";}
   }
-  function pickWinningMap(){
-    var c=[0,0,0];
-    for(var id in lobbyRoster){var v=lobbyRoster[id].vote;if(v===0||v===1||v===2)c[v]++;}
-    var best=0,max=-1;
-    for(var i=0;i<3;i++){if(c[i]>max){max=c[i];best=i;}}
-    return best;
+  function randomChoice(arr){return arr[Math.floor(Math.random()*arr.length)];}
+  function pickWinner(counts,enabled){
+    var best=-1,max=-1;
+    for(var i=0;i<enabled.length;i++){var k=enabled[i],v=counts[k]||0;if(v>max){max=v;best=k;}}
+    if(max<=0)return randomChoice(enabled);
+    var tied=[];
+    for(var j=0;j<enabled.length;j++){var kk=enabled[j];if((counts[kk]||0)===max)tied.push(kk);}
+    return tied.length>1?randomChoice(tied):best;
   }
-  function clearMapVoteTimer(){if(mapVoteTimer){clearTimeout(mapVoteTimer);mapVoteTimer=null;}}
-  function updateMapVoteTimerUI(){
+  function clearVoteTimer(){if(voteTimer){clearTimeout(voteTimer);voteTimer=null;}}
+  function updateModeTimerUI(){
     var el=document.getElementById("mapVoteTimer");
+    if(!el||lobbyPhase!=="modevote")return;
+    var left=modeVoteEndTime?Math.max(0,Math.ceil((modeVoteEndTime-Date.now())/1000)):0;
+    el.textContent=left>0?"Mode locks in "+left+"s — highest % wins":"Picking mode...";
+  }
+  function updateMapTimerUI(){
+    var el=document.getElementById("mapPickTimer");
     if(!el||lobbyPhase!=="mapvote")return;
     var left=mapVoteEndTime?Math.max(0,Math.ceil((mapVoteEndTime-Date.now())/1000)):0;
-    el.textContent=left>0?"Vote ends in "+left+"s — highest votes wins":"Picking map...";
+    el.textContent=left>0?"Map locks in "+left+"s — highest % wins":"Picking map...";
+  }
+  function updateModePercents(pcts){
+    for(var i=0;i<3;i++){var el=document.getElementById("mapPct"+i);if(el)el.textContent=(pcts[i]||0)+"%";}
+    var v0=document.getElementById("mapVote0");if(v0)v0.classList.toggle("selected",myLobbyVote===0);
+  }
+  function updateMapPercents(pcts){
+    for(var i=0;i<5;i++){var el=document.getElementById("mapPickPct"+i);if(el)el.textContent=(pcts[i]||0)+"%";}
+    var b0=document.getElementById("mapPick0");if(b0)b0.classList.toggle("selected",myMapVote===0);
+  }
+  function startModeVoteTimer(){
+    clearVoteTimer();
+    modeVoteEndTime=Date.now()+MODE_VOTE_SEC*1000;
+    updateModeTimerUI();
+    if(isHost){
+      voteTimer=setTimeout(function(){voteTimer=null;finishModeVote();},MODE_VOTE_SEC*1000);
+      broadcastLobby();
+    }
   }
   function startMapVoteTimer(){
-    clearMapVoteTimer();
+    clearVoteTimer();
     mapVoteEndTime=Date.now()+MAP_VOTE_SEC*1000;
-    updateMapVoteTimerUI();
+    updateMapTimerUI();
     if(isHost){
-      mapVoteTimer=setTimeout(function(){mapVoteTimer=null;finishMapVote();},MAP_VOTE_SEC*1000);
+      voteTimer=setTimeout(function(){voteTimer=null;finishMapVote();},MAP_VOTE_SEC*1000);
       broadcastLobby();
+    }
+  }
+  function finishModeVote(){
+    if(lobbyPhase!=="modevote")return;
+    clearVoteTimer();
+    var counts=[0,0,0];
+    for(var id in lobbyRoster){var v=lobbyRoster[id].modeVote;if(v===0||v===1||v===2)counts[v]++;}
+    var enabled=[0]; // only TAG for now
+    winningMode=pickWinner(counts,enabled);
+    if(winningMode===0){
+      lobbyPhase="mapvote";
+      broadcastLobby();
+      showMapPickHub(false);
+      startMapVoteTimer();
     }
   }
   function finishMapVote(){
     if(lobbyPhase!=="mapvote")return;
-    clearMapVoteTimer();
-    winningMap=pickWinningMap();
-    lobbyPhase="taghub";
+    clearVoteTimer();
+    var counts=[0,0,0,0,0];
+    for(var id in lobbyRoster){var v=lobbyRoster[id].mapVote;if(v===0||v===1||v===2||v===3||v===4)counts[v]++;}
+    var enabled=[0]; // only Baseplate for now
+    winningMap=pickWinner(counts,enabled);
+    lobbyPhase="ingame";
     broadcastLobby();
-    showServerHub(false);
-  }
-  function updateMapVotePercents(pcts){
-    for(var i=0;i<3;i++){var el=document.getElementById("mapPct"+i);if(el)el.textContent=(pcts[i]||0)+"%";}
-    var v0=document.getElementById("mapVote0");if(v0)v0.classList.toggle("selected",myLobbyVote===0);
+    hideLobbyPanels();
+    if(isHost)startTagMatch();
   }
   function showReadyLobby(fromNet){
     lobbyPhase="ready";exitLobbyInput();hideLobbyPanels();
     var el=document.getElementById("readyLobby");if(el){el.hidden=false;el.classList.add("on");}
     updateReadyLobbyUI();if(!fromNet&&isHost)broadcastLobby();
   }
-  function showMapVoteHub(fromNet){
-    lobbyPhase="mapvote";exitLobbyInput();hideLobbyPanels();
+  function showModeVoteHub(fromNet){
+    lobbyPhase="modevote";exitLobbyInput();hideLobbyPanels();
     var el=document.getElementById("mapVoteHub");if(el){el.hidden=false;el.classList.add("on");}
-    updateMapVotePercents(getVotePercents());
-    updateMapVoteTimerUI();
+    updateModePercents(getModePercents());
+    updateModeTimerUI();
+    if(!fromNet&&isHost)startModeVoteTimer();
+  }
+  function showMapVoteHub(fromNet){
+    // (legacy) kept for compatibility; now mode vote uses mapVoteHub
+    showModeVoteHub(fromNet);
+  }
+  function showMapPickHub(fromNet){
+    lobbyPhase="mapvote";exitLobbyInput();hideLobbyPanels();
+    var el=document.getElementById("mapPickHub");if(el){el.hidden=false;el.classList.add("on");}
+    updateMapPercents(getMapPercents());
+    updateMapTimerUI();
     if(!fromNet&&isHost)startMapVoteTimer();
   }
   function showServerHub(fromNet){
@@ -520,39 +689,94 @@ function initTagGame(){
   function applyLobby(d){
     if(d.locked)roomLocked=true;
     if(d.roster)lobbyRoster=d.roster;
+    if(d.modeVoteEndTime)modeVoteEndTime=d.modeVoteEndTime;
     if(d.mapVoteEndTime)mapVoteEndTime=d.mapVoteEndTime;
+    if(d.winningMode!==undefined)winningMode=d.winningMode;
     if(d.winningMap!==undefined)winningMap=d.winningMap;
     var phase=d.phase||lobbyPhase;
     if(phase==="ready")showReadyLobby(true);
-    else if(phase==="mapvote")showMapVoteHub(true);
+    else if(phase==="modevote")showModeVoteHub(true);
+    else if(phase==="mapvote")showMapPickHub(true);
     else if(phase==="taghub")showServerHub(true);
-    updateMapVotePercents(getVotePercents());
-    updateMapVoteTimerUI();
+    else if(phase==="ingame"){lobbyPhase="ingame";hideLobbyPanels();if(playing)clickPlay.classList.add("show");updateDashHud();}
+    updateModePercents(getModePercents());
+    updateMapPercents(getMapPercents());
+    updateModeTimerUI();
+    updateMapTimerUI();
   }
   function onReadyLobbyBtn(){
     if(!isHost||roomLocked||!playing)return;
-    roomLocked=true;lobbyPhase="mapvote";broadcastLobby();showMapVoteHub(false);
+    roomLocked=true;lobbyPhase="modevote";broadcastLobby();showModeVoteHub(false);
+  }
+  var myMapVote=null;
+  function castModeVote(idx){
+    if(lobbyPhase!=="modevote"||idx!==0)return;
+    myLobbyVote=idx;if(lobbyRoster[myId])lobbyRoster[myId].modeVote=idx;
+    if(isHost){broadcastLobby();}
+    else send(connections[roomCode],{type:"lobbyVote",id:myId,modeVote:idx});
+    updateModePercents(getModePercents());
   }
   function castMapVote(idx){
     if(lobbyPhase!=="mapvote"||idx!==0)return;
-    myLobbyVote=idx;if(lobbyRoster[myId])lobbyRoster[myId].vote=idx;
+    myMapVote=idx;if(lobbyRoster[myId])lobbyRoster[myId].mapVote=idx;
     if(isHost){broadcastLobby();}
-    else send(connections[roomCode],{type:"lobbyVote",id:myId,vote:idx});
-    updateMapVotePercents(getVotePercents());
+    else send(connections[roomCode],{type:"lobbyVote",id:myId,mapVote:idx});
+    updateMapPercents(getMapPercents());
   }
   function sendLobbyHello(conn){send(conn,{type:"lobbyHello",id:myId,name:myName});}
+  function startTagMatch(){
+    if(!isHost)return;
+    var ids=[];for(var id in lobbyRoster)ids.push(id);
+    if(ids.indexOf(myId)===-1)ids.push(myId);
+    var tagger=ids[Math.floor(Math.random()*ids.length)];
+    match.taggerId=tagger;
+    match.roles={};match.spectators={};
+    for(var i=0;i<ids.length;i++){
+      match.roles[ids[i]]=(ids[i]===tagger)?"tagger":"runner";
+      match.spectators[ids[i]]=false;
+    }
+    match.phase="rolling";
+    match.rollEndsAt=Date.now()+Math.floor(ROLL_DUR*1000);
+    match.endAt=Date.now()+MATCH_DUR*1000;
+    broadcast({type:"match",phase:"rolling",taggerId:match.taggerId,roles:match.roles,spectators:match.spectators,rollEndsAt:match.rollEndsAt,endAt:match.endAt});
+    if(match.roles[myId]){myRole=match.roles[myId];spectator=false;setRoleHud();player.pos.copy(oppositeSpawn(myRole==="tagger"));}
+    setTimeout(function(){
+      if(match.phase!=="rolling")return;
+      match.phase="reveal";
+      broadcast({type:"match",phase:"reveal",taggerId:match.taggerId,roles:match.roles,spectators:match.spectators,rollEndsAt:match.rollEndsAt,endAt:match.endAt});
+      setTimeout(function(){
+        if(match.phase!=="reveal")return;
+        match.phase="playing";
+        broadcast({type:"match",phase:"playing",taggerId:match.taggerId,roles:match.roles,spectators:match.spectators,endAt:match.endAt});
+      },Math.floor(START_DELAY*1000));
+    },Math.floor(ROLL_DUR*1000));
+  }
+  function endMatch(team){
+    if(!isHost)return;
+    match.phase="ended";match.winnerTeam=team;
+    var winners=[];
+    for(var id in match.roles){
+      if(team==="tagger"&&match.roles[id]==="tagger")winners.push(id);
+      if(team==="runners"&&match.roles[id]==="runner"&&!match.spectators[id])winners.push(id);
+    }
+    match.winners=winners;
+    match.winEndsAt=Date.now()+5000;
+    broadcast({type:"match",phase:"ended",winnerTeam:team,winners:winners,winEndsAt:match.winEndsAt,roles:match.roles,spectators:match.spectators});
+    setTimeout(function(){broadcast({type:"match",phase:"reset"});},5000);
+  }
   function startPlaying(){
     if(!scene||!camera||!renderer){setStatus("Game engine not ready - refresh page");return;}
     playing=true; myName=nameInput.value.trim()||"Player";
     playerNames[myId]=myName; menu.style.display="none";
     if(!multiplayer)clickPlay.classList.add("show");
     ensureLocalAvatar(); updatePlayerList(); dashCd=0;dashActive=null;updateDashHud();
+    setRoleHud();
   }
   function genCode(){var ch="ABCDEFGHJKLMNPQRSTUVWXYZ23456789",r="";for(var i=0;i<6;i++)r+=ch[Math.floor(Math.random()*ch.length)];return r;}
-  function state(){return{type:"state",id:myId,name:myName,x:player.pos.x,y:player.pos.y,z:player.pos.z,yaw:player.yaw,colors:myColors,wp:walkPhase,mov:syncMoving?1:0,spr:syncSprint?1:0,og:player.onGround?1:0,jp:jumpPrep,vy:player.vel.y,lt:landTimer};}
+  function state(){return{type:"state",id:myId,name:myName,x:player.pos.x,y:player.pos.y,z:player.pos.z,yaw:player.yaw,colors:myColors,wp:walkPhase,mov:syncMoving?1:0,spr:syncSprint?1:0,og:player.onGround?1:0,jp:jumpPrep,vy:player.vel.y,lt:landTimer,role:myRole,sp:spectator?1:0};}
   function remotePayload(id,rp){
     var t=rp.target;
-    return{type:"state",id:id,name:rp.name,x:t.x,y:t.y,z:t.z,yaw:t.yaw,colors:noobColors(),wp:t.wp||0,mov:t.mov?1:0,spr:t.spr?1:0,og:t.og?1:0,jp:t.jp||0,vy:t.vy||0,lt:t.lt||0};
+    return{type:"state",id:id,name:rp.name,x:t.x,y:t.y,z:t.z,yaw:t.yaw,colors:noobColors(),wp:t.wp||0,mov:t.mov?1:0,spr:t.spr?1:0,og:t.og?1:0,jp:t.jp||0,vy:t.vy||0,lt:t.lt||0,role:t.role||"runner",sp:t.sp?1:0};
   }
   function send(conn,d){if(conn&&conn.open)conn.send(d);}
   function broadcast(d,skip){for(var id in connections){if(id!==skip)send(connections[id],d);}}
@@ -569,27 +793,68 @@ function initTagGame(){
     if(d.jp!==undefined)rp.target.jp=d.jp;
     if(d.vy!==undefined)rp.target.vy=d.vy;
     if(d.lt!==undefined)rp.target.lt=d.lt;
+    if(d.role!==undefined)rp.target.role=d.role;
+    if(d.sp!==undefined)rp.target.sp=d.sp?1:0;
     updatePlayerList();
   }
   function handleData(fromId,d){
+    if(d.type==="match"){
+      if(d.phase)match.phase=d.phase;
+      if(d.taggerId!==undefined)match.taggerId=d.taggerId;
+      if(d.roles)match.roles=d.roles;
+      if(d.spectators)match.spectators=d.spectators;
+      if(d.endAt!==undefined)match.endAt=d.endAt;
+      if(d.rollEndsAt!==undefined)match.rollEndsAt=d.rollEndsAt;
+      if(d.winEndsAt!==undefined)match.winEndsAt=d.winEndsAt;
+      if(d.winnerTeam!==undefined)match.winnerTeam=d.winnerTeam;
+      if(d.winners)match.winners=d.winners;
+      if(match.roles&&match.roles[myId])myRole=match.roles[myId];
+      spectator=!!(match.spectators&&match.spectators[myId]);
+      setRoleHud();
+      // Ensure player can click to lock mouse
+      clickPlay.classList.toggle("show",playing&&!locked&&!inLobbyUi()&&!spectator);
+      if(match.phase==="rolling")showRoll("ROLLING...","Picking a tagger...");
+      else if(match.phase==="reveal"){var tn=(playerNames[match.taggerId]||match.taggerId||"");showRoll("TAGGER: "+tn,"Game starts in 1s");}
+      else hideRoll();
+      if(match.phase==="ended")showWin(match.winnerTeam,(match.winners||[]).map(function(id){return playerNames[id]||id;}));
+      else hideWin();
+      if(match.phase==="reset")resetToMenu();
+      return;
+    }
     if(d.type==="lobby"){applyLobby(d);return;}
     if(d.type==="lobbyHello"&&isHost){
       if(roomLocked){try{connections[fromId].close();}catch(e){}return;}
-      lobbyRoster[fromId]={name:d.name,ready:false,vote:null};
-      if(playing){
-        send(connections[fromId],buildLobbyMsg());
-        broadcastLobby(fromId);
-        updateReadyLobbyUI();
-      }
+      lobbyRoster[fromId]={name:d.name,ready:false,modeVote:null,mapVote:null};
+      if(playing)send(connections[fromId],buildLobbyMsg());
+      if(playing)broadcastLobby(fromId);
+      if(playing)updateReadyLobbyUI();
       return;
     }
     if(d.type==="lobbyVote"&&isHost){
-      if(fromId&&lobbyRoster[fromId])lobbyRoster[fromId].vote=d.vote;
-      broadcastLobby();
+      if(fromId&&lobbyRoster[fromId]){
+        if(d.modeVote!==undefined)lobbyRoster[fromId].modeVote=d.modeVote;
+        if(d.mapVote!==undefined)lobbyRoster[fromId].mapVote=d.mapVote;
+      }
       broadcastLobby();
       return;
     }
     if(d.type==="lobbyReject"){setStatus("Room locked — cannot join");return;}
+    if(d.type==="tagAttempt"&&isHost){
+      if(match.phase!=="playing")return;
+      if(match.taggerId!==fromId)return;
+      var tid=d.target;
+      if(!tid||tid===fromId)return;
+      if(match.spectators[tid])return;
+      var tagP=(fromId===myId)?player.pos:(remotePlayers[fromId]?remotePlayers[fromId].avatar.position.clone().add(new THREE.Vector3(0,EYE,0)):null);
+      var tgtP=(tid===myId)?player.pos:(remotePlayers[tid]?remotePlayers[tid].avatar.position.clone().add(new THREE.Vector3(0,EYE,0)):null);
+      if(!tagP||!tgtP)return;
+      if(tagP.distanceTo(tgtP)>TAG_WORLD_RANGE)return;
+      match.spectators[tid]=true;
+      broadcast({type:"match",phase:"playing",spectators:match.spectators});
+      var alive=0;for(var id in match.roles){if(match.roles[id]==="runner"&&!match.spectators[id])alive++;}
+      if(alive<=0)endMatch("tagger");
+      return;
+    }
     if(d.type==="state")upsertRemote(d);
     if(d.type==="join"){
       upsertRemote(d);send(connections[fromId]||connections[roomCode],Object.assign(state(),{type:"join"}));
@@ -625,7 +890,7 @@ function initTagGame(){
           conn.on("open",function(){
             send(conn,Object.assign(state(),{type:"join"}));
             sendLobbyHello(conn);
-            startPlaying();startSync();resolve();
+            startPlaying();startSync();enterMultiplayerLobby();resolve();
           });
           conn.on("data",function(d){handleData(code,d);if(d.type==="state")upsertRemote(d);});
           conn.on("close",function(){setStatus("Disconnected from host");});}
@@ -743,12 +1008,24 @@ function initTagGame(){
     var dt=Math.min((now-last)/1000,0.05);last=now;
     var moving=false,spd=WALK,camOff=0,groundBefore=player.onGround;
     if(dashCd>0){dashCd=Math.max(0,dashCd-dt);if(!dashActive)updateDashHud();}
-    if(lobbyPhase==="mapvote"){
-      updateMapVotePercents(getVotePercents());
-      updateMapVoteTimerUI();
-      if(isHost&&mapVoteEndTime&&Date.now()>=mapVoteEndTime&&!mapVoteTimer)finishMapVote();
+    // Safety: if we are in-game but not locked, always show click prompt.
+    if(playing&&!locked&&!inLobbyUi()&&!spectator){
+      if(clickPlay)clickPlay.classList.add("show");
     }
-    if(locked&&playing&&!inLobbyUi()){
+    if(isHost&&match.phase==="playing"&&match.endAt&&Date.now()>=match.endAt){
+      var alive=0;for(var mid in match.roles){if(match.roles[mid]==="runner"&&!match.spectators[mid])alive++;}
+      endMatch(alive>0?"runners":"tagger");
+    }
+    if(lobbyPhase==="modevote"){
+      updateModePercents(getModePercents());
+      updateModeTimerUI();
+      if(isHost&&modeVoteEndTime&&Date.now()>=modeVoteEndTime&&!voteTimer)finishModeVote();
+    }else if(lobbyPhase==="mapvote"){
+      updateMapPercents(getMapPercents());
+      updateMapTimerUI();
+      if(isHost&&mapVoteEndTime&&Date.now()>=mapVoteEndTime&&!voteTimer)finishMapVote();
+    }
+    if(locked&&playing&&!inLobbyUi()&&!spectator){
       if(updateDash(dt)){
         moving=true;
         camOff=updateHandAnim(dt,true,spd);
@@ -773,6 +1050,7 @@ function initTagGame(){
     for(var id in remotePlayers){var rp=remotePlayers[id],t=rp.target;
       rp.avatar.position.x+=(t.x-rp.avatar.position.x)*0.35;rp.avatar.position.z+=(t.z-rp.avatar.position.z)*0.35;
       rp.avatar.position.y=t.y-EYE;rp.avatar.rotation.y=t.yaw;
+      rp.avatar.visible=!t.sp;
       if(!t.og)rp.airTime=(rp.airTime||0)+dt;else rp.airTime=0;
       animateNoobBody(rp,{onGround:!!t.og,airTime:rp.airTime||0,landT:t.lt||0,jumpPrep:t.jp||0,vy:t.vy||0,walkPhase:t.wp||0,moving:!!t.mov,sprint:!!t.spr},dt);}
     if(localAvatar&&viewMode>0&&playing){
@@ -802,4 +1080,4 @@ function initTagGame(){
 if(document.readyState==="loading"){document.addEventListener("DOMContentLoaded",initTagGame);}else{initTagGame();}
 </script>
 </body>
-</html>
+</html>s
