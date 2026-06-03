@@ -540,10 +540,21 @@ function initTagGame(){
     var worldH=2*Math.tan(vFov/2)*refDist;
     return(px/window.innerHeight)*worldH;
   }
+  function groundHeightAtFoot(x,z){
+    var h=groundHeightAt(x,z);
+    var pad=0.4;
+    h=Math.max(h,groundHeightAt(x+pad,z));
+    h=Math.max(h,groundHeightAt(x-pad,z));
+    h=Math.max(h,groundHeightAt(x,z+pad));
+    h=Math.max(h,groundHeightAt(x,z-pad));
+    return h;
+  }
+  function playerGroundY(x,z){return EYE+groundHeightAtFoot(x,z);}
   function clampPlayerPos(){
     player.pos.x=Math.max(-mapHalf,Math.min(mapHalf,player.pos.x));
     player.pos.z=Math.max(-mapHalf,Math.min(mapHalf,player.pos.z));
-    if(player.pos.y<EYE){player.pos.y=EYE;player.vel.y=0;player.onGround=true;}
+    var gy=playerGroundY(player.pos.x,player.pos.z);
+    if(player.pos.y<gy){player.pos.y=gy;if(player.vel.y<0)player.vel.y=0;}
   }
 
   function clearMap(){
@@ -591,46 +602,25 @@ function initTagGame(){
       var rockMat=new THREE.MeshStandardMaterial({color:0x4A4A4A,roughness:1});
       var snowMat=new THREE.MeshStandardMaterial({color:0xffffff,roughness:0.92});
       function addFujiMountain(md){
-        mountains.push({x:md.x,z:md.z,r:md.r,h:md.h});
+        // hitbox = full cone (rock + snow share same slope)
+        mountains.push({x:md.x,z:md.z,r:md.r,h:md.h,snowFrac:0.42});
         var g=new THREE.Group();
-        // smoother cone
-        var geom=new THREE.ConeGeometry(md.r,md.h,64,1);
-        var mesh=new THREE.Mesh(geom,rockMat);
-        mesh.position.set(0,md.h*0.5,0);
-        mesh.castShadow=true;mesh.receiveShadow=true;
-        g.add(mesh);
-
-        // snow cap: apex aligned with mountain tip; base radius matches mountain at snowline
         var capH=md.h*0.42;
-        var capR=md.r*(capH/md.h);
-        var capGeom=new THREE.ConeGeometry(capR,capH,64,1);
-        var pos=capGeom.attributes.position;
-        for(var vi=0;vi<pos.count;vi++){
-          var y=pos.getY(vi);
-          if(y>-capH*0.35)continue; // wavy snowline only at base, keep tip sharp
-          var x=pos.getX(vi), z=pos.getZ(vi);
-          var a=Math.atan2(z,x);
-          var n=0.12*Math.sin(a*5.0)+0.07*Math.sin(a*11.0+0.7);
-          pos.setX(vi,x*(1+n));
-          pos.setZ(vi,z*(1+n));
-        }
-        pos.needsUpdate=true;capGeom.computeVertexNormals();
-        var cap=new THREE.Mesh(capGeom,snowMat);
-        cap.position.set(0,md.h-capH*0.5,0); // white tip = mountain tip at y=md.h
+        var snowBaseY=md.h-capH;
+        var rockTopR=md.r*(capH/md.h);
+
+        // rock only below snowline; openEnded=true so no gray disc shows through snow gaps
+        var rockGeom=new THREE.CylinderGeometry(rockTopR,md.r,snowBaseY,64,1,true);
+        var rock=new THREE.Mesh(rockGeom,rockMat);
+        rock.position.set(0,snowBaseY*0.5,0);
+        rock.castShadow=true;rock.receiveShadow=true;
+        g.add(rock);
+
+        // smooth snow cone (no floating planes or wavy verts)
+        var cap=new THREE.Mesh(new THREE.ConeGeometry(rockTopR,capH,64,1),snowMat);
+        cap.position.set(0,snowBaseY+capH*0.5,0);
         cap.castShadow=true;cap.receiveShadow=true;
         g.add(cap);
-
-        var snowBaseY=md.h-capH;
-        for(var si=0;si<6;si++){
-          var streak=new THREE.Mesh(new THREE.PlaneGeometry(md.r*0.14,capH*0.55),snowMat);
-          var ang=(si/6)*Math.PI*2 + 0.35;
-          var sr=md.r*(snowBaseY/md.h)*0.55;
-          streak.position.set(Math.cos(ang)*sr, snowBaseY+capH*0.22, Math.sin(ang)*sr);
-          streak.rotation.y=ang+Math.PI/2;
-          streak.rotation.x=-0.55;
-          streak.material.side=THREE.DoubleSide;
-          g.add(streak);
-        }
 
         g.position.set(md.x,0,md.z);
         mapDecor.add(g);
@@ -1312,8 +1302,7 @@ function initTagGame(){
       player.vel.y+=GRAV*dt;
       player.pos.x+=player.vel.x*dt;player.pos.z+=player.vel.z*dt;player.pos.y+=player.vel.y*dt;
       clampPlayerPos();
-      var gh=groundHeightAt(player.pos.x,player.pos.z);
-      var groundY=EYE+gh;
+      var groundY=playerGroundY(player.pos.x,player.pos.z);
       if(player.pos.y<=groundY){
         if(!groundBefore)landTimer=LAND_DUR;
         player.pos.y=groundY;player.vel.y=0;player.onGround=true;
