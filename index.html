@@ -53,15 +53,23 @@ html.tag-framed #frameWarn[hidden]{display:flex!important}
 #frameWarn .box{max-width:420px;background:#fff;border:3px solid #e2231a;border-radius:12px;padding:1.5rem 2rem;text-align:left;line-height:1.5}
 #frameWarn h2{color:#e2231a;margin-bottom:0.75rem}
 #frameWarn ol{margin:0.5rem 0 0 1.2rem}
-#viewHint{position:fixed;bottom:12px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.55);color:#fff;padding:6px 14px;border-radius:6px;font-size:12px;pointer-events:none;z-index:6;display:none}
+#bottomHud{position:fixed;bottom:12px;left:50%;transform:translateX(-50%);z-index:9;display:flex;flex-direction:column;align-items:center;gap:6px;pointer-events:none;max-width:min(96vw,520px)}
+#bottomHud>*{position:relative;left:auto;right:auto;bottom:auto;transform:none}
+#viewHint{background:rgba(0,0,0,0.55);color:#fff;padding:6px 14px;border-radius:6px;font-size:12px;display:none;white-space:nowrap}
 #viewHint.on{display:block}
-#dashHud{position:fixed;bottom:44px;left:50%;transform:translateX(-50%);font-size:12px;color:#fff;background:rgba(0,0,0,0.55);padding:5px 12px;border-radius:6px;z-index:6;pointer-events:none;display:none}
+#dashHud{font-size:12px;color:#fff;background:rgba(0,0,0,0.55);padding:5px 12px;border-radius:6px;display:none;white-space:nowrap}
 #dashHud.on{display:block}
-#roleHud{position:fixed;top:12px;left:50%;transform:translateX(-50%);z-index:9;pointer-events:none;background:rgba(0,0,0,0.45);color:#fff;padding:4px 10px;border-radius:999px;font-size:12px;letter-spacing:0.06em;display:none}
+#pondHud{background:rgba(0,80,160,0.8);color:#fff;padding:6px 14px;border-radius:8px;font-size:13px;font-weight:700;display:none;white-space:nowrap}
+#pondHud.on{display:block}
+#drownHud{background:rgba(0,60,120,0.9);color:#fff;padding:10px 22px;border-radius:10px;font-size:clamp(1rem,3vw,1.2rem);font-weight:800;letter-spacing:0.06em;display:none;border:2px solid rgba(255,255,255,0.5);white-space:nowrap}
+#drownHud.on{display:block}
+#roleHud{position:fixed;top:12px;left:50%;transform:translateX(-50%);z-index:9;pointer-events:none;background:rgba(0,0,0,0.45);color:#fff;padding:4px 10px;border-radius:999px;font-size:12px;letter-spacing:0.06em;display:none;max-width:92vw;text-align:center}
 #roleHud.on{display:block}
-#roleHud.spectator-tag{background:rgba(226,35,26,0.95);color:#fff;font-size:clamp(1.2rem,4vw,1.65rem);font-weight:900;padding:14px 28px;border-radius:12px;border:3px solid #fff;box-shadow:0 8px 36px rgba(226,35,26,0.55);letter-spacing:0.14em}
-#matchTimer{position:fixed;top:44px;right:12px;z-index:9;pointer-events:none;background:rgba(0,0,0,0.55);color:#fff;padding:6px 12px;border-radius:8px;font-size:15px;font-weight:800;font-variant-numeric:tabular-nums;letter-spacing:0.06em;display:none}
+#roleHud.spectator-tag{background:rgba(226,35,26,0.95);color:#fff;font-size:clamp(1rem,3.2vw,1.35rem);font-weight:900;padding:10px 20px;border-radius:12px;border:3px solid #fff;box-shadow:0 6px 28px rgba(226,35,26,0.45);letter-spacing:0.12em}
+#matchTimer{position:fixed;top:12px;right:12px;z-index:9;pointer-events:none;background:rgba(0,0,0,0.55);color:#fff;padding:6px 12px;border-radius:8px;font-size:15px;font-weight:800;font-variant-numeric:tabular-nums;letter-spacing:0.06em;display:none}
 #matchTimer.on{display:block}
+body.role-hud-on #matchTimer.on{top:48px}
+body.role-spectator #matchTimer.on{top:58px}
 .panel .nameRow{display:flex;gap:0.4rem;align-items:stretch;margin:0.35rem 0}
 .panel .nameRow input{flex:1;margin:0}
 .panel .btn-save{flex:0 0 auto;width:auto;padding:0.55rem 0.7rem;margin:0;font-size:0.82rem;white-space:nowrap;background:#555;border:none;border-radius:6px;color:#fff;font-weight:700;cursor:pointer}
@@ -129,8 +137,12 @@ html.tag-framed #frameWarn[hidden]{display:flex!important}
 <div id="crosshair"></div>
 <div id="roleHud"></div>
 <div id="matchTimer" hidden>5:00</div>
-<div id="viewHint">V = cycle view: 1st person / 3rd back / 3rd front</div>
-<div id="dashHud"></div>
+<div id="bottomHud">
+  <div id="drownHud" hidden>You drowned</div>
+  <div id="pondHud" hidden></div>
+  <div id="dashHud"></div>
+  <div id="viewHint">V = cycle view: 1st person / 3rd back / 3rd front</div>
+</div>
 <div id="rollHud" hidden><div class="box"><div class="big" id="rollBig">ROLLING...</div><div class="sub" id="rollSub"></div></div></div>
 <div id="winHud" hidden><div class="box"><div class="title" id="winTitle">WINS!</div><div class="names" id="winNames"></div></div></div>
 <div id="readyLobby" hidden>
@@ -169,7 +181,7 @@ html.tag-framed #frameWarn[hidden]{display:flex!important}
         <span class="mapVoteTitle">Mountain</span>
         <span class="mapVotePct" id="mapPickPct1">0%</span>
       </button>
-      <button type="button" class="serverHubCard muted pickCard" id="mapPick2" disabled>
+      <button type="button" class="serverHubCard pickCard" id="mapPick2">
         <span class="mapVoteTitle">Forest</span>
         <span class="mapVotePct" id="mapPickPct2">0%</span>
       </button>
@@ -254,7 +266,7 @@ function initTagGame(){
   }
   if(typeof THREE==="undefined"){alert("Game failed to load: THREE.js missing");return;}
   var EYE=1.75, MAP=400, HALF=MAP/2-2, GRAV=-24, JUMP=9, WALK=8;
-  var mapHalf=HALF, currentMap=0, mapDecor=null, mountains=[];
+  var mapHalf=HALF, mapBound=HALF, currentMap=0, mapDecor=null, mountains=[], forestTrees=[], forestProtos={}, forestGrid={}, FOREST_CELL=14, pond={r:0}, drowned=false;
   var DASH_CD=3, DASH_PX=500, DASH_DUR=0.28, dashCd=0, dashActive=null;
   var lobbyPhase="none", roomLocked=false, lobbyRoster={}, myLobbyVote=null;
   var MODE_VOTE_SEC=5, MAP_VOTE_SEC=5;
@@ -304,7 +316,7 @@ function initTagGame(){
   updateMenuEnv();
   if(canMultiplayer())setStatus("多人模式已就緒");
 
-  var player={pos:new THREE.Vector3(0,1.75,5),vel:new THREE.Vector3(),onGround:true,yaw:0,pitch:0};
+  var player={pos:new THREE.Vector3(0,1.75,5),vel:new THREE.Vector3(),onGround:true,yaw:0,pitch:0,pondWade:0};
   var myColors={shirt:NOOB.shirt,pants:NOOB.pants,skin:NOOB.skin};
   var playerNames={}, keys={};
   var walkPhase=0, wasOnGround=true, landTimer=0, jumpPrep=0, airTime=0;
@@ -316,7 +328,7 @@ function initTagGame(){
   var scene,camera,renderer,rightHand,localAvatar=null;
   var floorMesh=null, gridHelper=null;
   var TP_DIST=5.5, TP_HEIGHT=1.1;
-  var MATCH_DUR=300, ROLL_DUR=2.5, START_DELAY=1, TAG_CLICK_PX=100, TAG_WORLD_RANGE=7;
+  var MATCH_DUR=300, ROLL_DUR=2.5, START_DELAY=1, TAG_CLICK_PX=100, TAG_WORLD_RANGE=11, TAG_MAX_Y=30;
   var match={phase:"idle",taggerId:"",roles:{},spectators:{},spawns:{},endAt:0,rollEndsAt:0,winEndsAt:0,winnerTeam:"",winners:[]};
   var myRole="runner", spectator=false;
   var rollAnimNext=0, rollAnimPick="";
@@ -325,11 +337,14 @@ function initTagGame(){
   function setHud(el,on){if(!el)return;el.hidden=!on;el.classList.toggle("on",!!on);}
   function setRoleHud(){
     if(!roleHud)return;
+    document.body.classList.remove("role-hud-on","role-spectator");
     if(!multiplayer||match.phase==="idle"){setHud(roleHud,false);roleHud.classList.remove("spectator-tag");return;}
     setHud(roleHud,true);
+    document.body.classList.add("role-hud-on");
     if(spectator){
       roleHud.textContent="SPECTATOR";
       roleHud.classList.add("spectator-tag");
+      document.body.classList.add("role-spectator");
     }else{
       roleHud.classList.remove("spectator-tag");
       roleHud.textContent="You are "+(myRole==="tagger"?"TAGGER":"RUNNER");
@@ -387,9 +402,23 @@ function initTagGame(){
     var x=isTagger?-m:m;
     return new THREE.Vector3(x,EYE,0);
   }
+  function showDrownHud(on){
+    var el=document.getElementById("drownHud");
+    if(el)el.classList.toggle("on",!!on);
+    document.body.classList.toggle("hud-drowned",!!on);
+  }
+  function updatePondHud(){
+    var el=document.getElementById("pondHud");
+    if(!el)return;
+    var show=playing&&currentMap===2&&!spectator&&player.pondWade>0.08;
+    el.classList.toggle("on",show);
+    if(show)el.textContent=player.pondWade>0.42?"Sinking...":"Wading in water...";
+  }
   function resetToMenu(){
     hideRoll();hideWin();
-    match={phase:"idle",taggerId:"",roles:{},spectators:{},endAt:0,rollEndsAt:0,winEndsAt:0,winnerTeam:"",winners:[]};
+    drowned=false;showDrownHud(false);
+    clearMap();
+    match={phase:"idle",taggerId:"",roles:{},spectators:{},spawns:{},endAt:0,rollEndsAt:0,winEndsAt:0,winnerTeam:"",winners:[]};
     spectator=false;myRole="runner";setRoleHud();
     updateMatchTimerUI();
     playing=false;locked=false;
@@ -430,6 +459,7 @@ function initTagGame(){
   document.getElementById("mapVote0").addEventListener("click",function(){castModeVote(0);});
   document.getElementById("mapPick0").addEventListener("click",function(){castMapVote(0);});
   document.getElementById("mapPick1").addEventListener("click",function(){castMapVote(1);});
+  document.getElementById("mapPick2").addEventListener("click",function(){castMapVote(2);});
   document.getElementById("hubCardTag").addEventListener("click",function(){closeServerHub();});
   document.getElementById("hubCard2").addEventListener("click",function(){});
   document.getElementById("hubCard3").addEventListener("click",function(){});
@@ -514,8 +544,7 @@ function initTagGame(){
       if(t.sp)continue;
       if(!match.roles[id]||match.roles[id]!=="runner")continue;
       if(match.spectators[id])continue;
-      if(t.role!=="runner")continue;
-      var v=rp.avatar.position.clone();v.y=EYE;
+      var v=new THREE.Vector3(t.x,t.y,t.z);
       var p=v.project(camera);
       if(p.z<-1||p.z>1)continue;
       var sx=(p.x*0.5+0.5)*window.innerWidth;
@@ -550,18 +579,39 @@ function initTagGame(){
     return h;
   }
   function playerGroundY(x,z){return EYE+groundHeightAtFoot(x,z);}
+  function getEyePosForPlayer(id){
+    if(id===myId)return player.pos;
+    var rp=remotePlayers[id];
+    if(!rp)return null;
+    var t=rp.target;
+    return new THREE.Vector3(t.x,t.y,t.z);
+  }
+  function tagDistXZ(a,b){
+    var dx=a.x-b.x,dz=a.z-b.z;
+    return Math.sqrt(dx*dx+dz*dz);
+  }
   function clampPlayerPos(){
-    player.pos.x=Math.max(-mapHalf,Math.min(mapHalf,player.pos.x));
-    player.pos.z=Math.max(-mapHalf,Math.min(mapHalf,player.pos.z));
+    if(currentMap===1||currentMap===2){
+      var lim=mapBound-0.5;
+      var d2=player.pos.x*player.pos.x+player.pos.z*player.pos.z;
+      if(d2>lim*lim){
+        var d=Math.sqrt(d2), s=lim/d;
+        player.pos.x*=s;player.pos.z*=s;
+      }
+    }else{
+      player.pos.x=Math.max(-mapHalf,Math.min(mapHalf,player.pos.x));
+      player.pos.z=Math.max(-mapHalf,Math.min(mapHalf,player.pos.z));
+    }
+    resolveTreeCollision();
     var gy=playerGroundY(player.pos.x,player.pos.z);
     if(player.pos.y<gy){player.pos.y=gy;if(player.vel.y<0)player.vel.y=0;}
   }
 
   function clearMap(){
     if(mapDecor){scene.remove(mapDecor);mapDecor=null;}
-    mapHalf=HALF;
+    mapHalf=HALF;mapBound=HALF;
     currentMap=0;
-    mountains=[];
+    mountains=[];forestTrees=[];forestProtos={};forestGrid={};pond={r:0};
     if(floorMesh)floorMesh.visible=true;
     if(gridHelper)gridHelper.visible=true;
   }
@@ -626,8 +676,225 @@ function initTagGame(){
         mapDecor.add(g);
       }
       for(var mi=0;mi<mDefs.length;mi++)addFujiMountain(mDefs[mi]);
+      mapBound=outerR;
+      scene.add(mapDecor);
+    }else if(currentMap===2){
+      if(floorMesh)floorMesh.visible=false;
+      if(gridHelper)gridHelper.visible=false;
+      mapHalf=Math.floor(HALF/1.5);
+      mapBound=mapHalf;
+      mapDecor=new THREE.Group();
+      var pondR=Math.max(10,mapHalf*0.14);
+      pond={cx:0,cz:0,r:pondR,surfaceY:0.05,drownDepth:1.05};
+      var grassMat=new THREE.MeshLambertMaterial({color:0x3d8b40});
+      var ground=new THREE.Mesh(new THREE.CircleGeometry(mapHalf,48),grassMat);
+      ground.rotation.x=-Math.PI/2;ground.position.y=pond.surfaceY;ground.receiveShadow=true;
+      mapDecor.add(ground);
+      var waterMat=new THREE.MeshLambertMaterial({color:0x1e6bb8});
+      var pondMesh=new THREE.Mesh(new THREE.CircleGeometry(pond.r,48),waterMat);
+      pondMesh.rotation.x=-Math.PI/2;pondMesh.position.y=pond.surfaceY+0.002;
+      mapDecor.add(pondMesh);
+      var trunkMat=new THREE.MeshLambertMaterial({color:0x5c3d1e});
+      var birchTrunkMat=new THREE.MeshLambertMaterial({color:0xe5e0d6});
+      var leafMats=[
+        new THREE.MeshLambertMaterial({color:0x2d6b2d}),
+        new THREE.MeshLambertMaterial({color:0x3d8f42}),
+        new THREE.MeshLambertMaterial({color:0x1a4d22}),
+        new THREE.MeshLambertMaterial({color:0xc85a2a}),
+        new THREE.MeshLambertMaterial({color:0x5a9e6e})
+      ];
+      function forestTreeHitR(v,tr,th){
+        if(v===0)return tr*1.05;
+        if(v===1)return tr*1.02;
+        if(v===2)return tr*0.72;
+        if(v===3)return tr*0.98;
+        return tr*1.32;
+      }
+      function buildForestTree(v,tr,th){
+        var tg=new THREE.Group(), trunk, leaves, bush, i, trunkH, leafH, canopyR, tierH, tierR, yTop;
+        if(v===0){
+          trunkH=th*0.4;
+          trunk=new THREE.Mesh(new THREE.CylinderGeometry(tr*0.36,tr*0.44,trunkH,6),trunkMat);
+          trunk.position.y=trunkH*0.5;
+          leafH=th-trunkH;
+          leaves=new THREE.Mesh(new THREE.ConeGeometry(tr*1.05,leafH,6),leafMats[0]);
+          leaves.position.y=trunkH+leafH*0.5;
+          tg.add(trunk,leaves);
+        }else if(v===1){
+          trunkH=th*0.36;
+          trunk=new THREE.Mesh(new THREE.CylinderGeometry(tr*0.36,tr*0.48,trunkH,6),trunkMat);
+          trunk.position.y=trunkH*0.5;
+          canopyR=tr*1.02;
+          leaves=new THREE.Mesh(new THREE.SphereGeometry(canopyR,8,6),leafMats[1]);
+          leaves.position.y=trunkH+canopyR;
+          tg.add(trunk,leaves);
+        }else if(v===2){
+          trunkH=th*0.7;
+          trunk=new THREE.Mesh(new THREE.CylinderGeometry(tr*0.2,tr*0.26,trunkH,6),birchTrunkMat);
+          trunk.position.y=trunkH*0.5;
+          canopyR=tr*0.72;
+          leaves=new THREE.Mesh(new THREE.SphereGeometry(canopyR,8,6),leafMats[2]);
+          leaves.position.y=trunkH+canopyR*0.92;
+          tg.add(trunk,leaves);
+        }else if(v===3){
+          trunkH=th*0.26;
+          trunk=new THREE.Mesh(new THREE.CylinderGeometry(tr*0.3,tr*0.4,trunkH,6),trunkMat);
+          trunk.position.y=trunkH*0.5;
+          yTop=trunkH;
+          for(i=0;i<3;i++){
+            tierR=tr*(0.92-i*0.17);
+            tierH=th*(0.2-i*0.03);
+            var cone=new THREE.Mesh(new THREE.ConeGeometry(tierR,tierH,6),leafMats[2]);
+            cone.position.y=yTop+tierH*0.5;
+            tg.add(cone);
+            yTop+=tierH*0.82;
+          }
+          tg.add(trunk);
+        }else{
+          trunkH=th*0.34;
+          trunk=new THREE.Mesh(new THREE.CylinderGeometry(tr*0.26,tr*0.34,trunkH,6),trunkMat);
+          trunk.position.y=trunkH*0.5;
+          canopyR=tr*0.52;
+          bush=new THREE.Mesh(new THREE.SphereGeometry(canopyR,6,5),leafMats[4]);
+          bush.position.y=trunkH+canopyR*0.7;bush.scale.y=0.7;
+          yTop=trunkH+canopyR*1.4;
+          leafH=Math.max(th-yTop,th*0.28);
+          leaves=new THREE.Mesh(new THREE.ConeGeometry(tr*1.28,leafH,6),leafMats[3]);
+          leaves.position.y=yTop+leafH*0.5;
+          tg.add(trunk,bush,leaves);
+        }
+        return tg;
+      }
+      forestTrees=[];forestGrid={};
+      var forestClearR=Math.max(pond.r+36, mapHalf*0.2);
+      var pondShoreR=pond.r+6;
+      var mapTreeLim=mapHalf-3;
+      var want=Math.floor(mapHalf*2.2*8);
+      var tries=0;
+      while(forestTrees.length<want&&tries<want*50){
+        tries++;
+        var treeAng=Math.random()*Math.PI*2;
+        var treeRad=Math.sqrt(Math.random())*mapTreeLim;
+        var tx=Math.cos(treeAng)*treeRad;
+        var tz=Math.sin(treeAng)*treeRad;
+        if(tx*tx+tz*tz<forestClearR*forestClearR)continue;
+        if(tx*tx+tz*tz<pondShoreR*pondShoreR)continue;
+        var tr=(0.55+Math.random()*0.42)*1.5, th=(2.3+Math.random()*1.9)*1.5;
+        var tv=Math.floor(Math.random()*5);
+        var hitR=forestTreeHitR(tv,tr,th);
+        if(!forestPlaceOk(tx,tz,hitR))continue;
+        var td={x:tx,z:tz,r:hitR,h:th,v:tv,tr:tr};
+        forestTrees.push(td);
+        forestGridAdd(td);
+        var tg=buildForestTree(tv,tr,th);
+        tg.position.set(tx,0,tz);
+        mapDecor.add(tg);
+      }
       scene.add(mapDecor);
     }
+  }
+
+  function isInPond(x,z){
+    if(currentMap!==2||!pond.r)return false;
+    var dx=x-(pond.cx||0), dz=z-(pond.cz||0);
+    return dx*dx+dz*dz<=pond.r*pond.r;
+  }
+  function pondDepth01(x,z){
+    if(!pond.r)return 0;
+    var dx=x-(pond.cx||0), dz=z-(pond.cz||0);
+    var d2=dx*dx+dz*dz;
+    if(d2>=pond.r*pond.r)return 0;
+    return 1-Math.sqrt(d2)/pond.r;
+  }
+  function updatePondSink(dt){
+    player.pondWade=0;
+    if(!playing||spectator||currentMap!==2||!pond.r||inLobbyUi())return;
+    if(multiplayer&&match.phase!=="playing")return;
+    if(!isInPond(player.pos.x,player.pos.z))return;
+    var depth=pondDepth01(player.pos.x,player.pos.z);
+    player.pondWade=depth;
+    var surf=pond.surfaceY||0.05;
+    var drown=pond.drownDepth||1.05;
+    var waterEye=EYE+surf;
+    if(depth<0.38){
+      player.onGround=true;
+      player.vel.y=0;
+      if(player.pos.y<waterEye)player.pos.y=waterEye;
+      if(player.pos.y>waterEye+0.08)player.pos.y=waterEye;
+      return;
+    }
+    player.onGround=false;
+    var targetY=waterEye-depth*drown;
+    if(player.pos.y>targetY)player.pos.y=Math.max(targetY,player.pos.y-(1.6+depth*2.2)*dt);
+    player.vel.y=0;
+    if(depth>=0.72&&player.pos.y<=waterEye-drown*0.88)tryPondDeath();
+  }
+  function forestGridAdd(t){
+    var k=Math.floor(t.x/FOREST_CELL)+","+Math.floor(t.z/FOREST_CELL);
+    if(!forestGrid[k])forestGrid[k]=[];
+    forestGrid[k].push(t);
+  }
+  function forestPlaceOk(tx,tz,hitR){
+    var ix=Math.floor(tx/FOREST_CELL), iz=Math.floor(tz/FOREST_CELL);
+    for(var gx=ix-1;gx<=ix+1;gx++){
+      for(var gz=iz-1;gz<=iz+1;gz++){
+        var cell=forestGrid[gx+","+gz];
+        if(!cell)continue;
+        for(var ci=0;ci<cell.length;ci++){
+          var ot=cell[ci];
+          var dx=tx-ot.x,dz=tz-ot.z;
+          if(dx*dx+dz*dz<(hitR+ot.r+0.42)*(hitR+ot.r+0.42))return false;
+        }
+      }
+    }
+    return true;
+  }
+  function resolveTreeCollision(){
+    if(currentMap!==2||!forestTrees.length)return;
+    var ix=Math.floor(player.pos.x/FOREST_CELL), iz=Math.floor(player.pos.z/FOREST_CELL);
+    for(var gx=ix-1;gx<=ix+1;gx++){
+      for(var gz=iz-1;gz<=iz+1;gz++){
+        var cell=forestGrid[gx+","+gz];
+        if(!cell)continue;
+        for(var i=0;i<cell.length;i++){
+          var tr=cell[i];
+          if(isInPond(tr.x,tr.z))continue;
+          var dx=player.pos.x-tr.x, dz=player.pos.z-tr.z;
+          var d2=dx*dx+dz*dz, minR=tr.r+0.4;
+          if(isInPond(player.pos.x,player.pos.z)&&d2<(pond.r+tr.r+2)*(pond.r+tr.r+2))continue;
+          if(d2<minR*minR&&d2>1e-8){
+            var d=Math.sqrt(d2), push=(minR-d)/d;
+            player.pos.x+=dx*push;player.pos.z+=dz*push;
+            player.vel.x=0;player.vel.z=0;
+          }
+        }
+      }
+    }
+  }
+  function applyDrown(id){
+    if(!match.spectators)match.spectators={};
+    if(match.spectators[id])return;
+    match.spectators[id]=true;
+    if(id===myId){
+      drowned=true;spectator=true;setRoleHud();showDrownHud(true);
+      if(document.pointerLockElement===canvas)document.exitPointerLock();
+      clickPlay.classList.remove("show");
+      if(localAvatar)localAvatar.group.visible=false;
+    }
+  }
+  function tryPondDeath(){
+    if(!playing||spectator||currentMap!==2)return;
+    if(multiplayer&&match.phase!=="playing")return;
+    if(!isInPond(player.pos.x,player.pos.z))return;
+    if(isHost){
+      applyDrown(myId);
+      var sm={type:"match",phase:"playing",spectators:match.spectators};
+      broadcast(sm);applyMatchState(sm);
+      var alive=0;for(var id in match.roles){if(match.roles[id]==="runner"&&!match.spectators[id])alive++;}
+      if(alive<=0)endMatch("tagger");
+    }else if(multiplayer&&connections[roomCode]){
+      send(connections[roomCode],{type:"pondDeath",id:myId});
+    }else applyDrown(myId);
   }
 
   function groundHeightAt(x,z){
@@ -645,15 +912,35 @@ function initTagGame(){
   }
 
   function getSpawnPoints(){
-    // 30 spawnpoints far apart around the edge.
+    var n=currentMap===2?50:30;
     var pts=[];
-    var r=Math.max(18,mapHalf-18);
-    for(var i=0;i<30;i++){
-      var a=(i/30)*Math.PI*2;
-      var rr=r-(i%2?12:0);
-      pts.push({x:Math.cos(a)*rr,z:Math.sin(a)*rr});
+    if(currentMap===2){
+      var minD=11, pr=pond.r||12;
+      var att=0;
+      while(pts.length<n&&att<n*50){
+        att++;
+        var x=(Math.random()*2-1)*(mapHalf-8);
+        var z=(Math.random()*2-1)*(mapHalf-8);
+        if(x*x+z*z<pr*pr+36)continue;
+        var ok=true;
+        for(var j=0;j<pts.length;j++){
+          var dx=x-pts[j].x,dz=z-pts[j].z;
+          if(dx*dx+dz*dz<minD*minD){ok=false;break;}
+        }
+        if(ok)pts.push({x:x,z:z});
+      }
+      while(pts.length<n){
+        var a=pts.length/n*Math.PI*2;
+        pts.push({x:Math.cos(a)*(mapHalf-14),z:Math.sin(a)*(mapHalf-14)});
+      }
+    }else{
+      var r=Math.max(18,mapHalf-18);
+      for(var i=0;i<n;i++){
+        var a=(i/n)*Math.PI*2;
+        var rr=r-(i%2?12:0);
+        pts.push({x:Math.cos(a)*rr,z:Math.sin(a)*rr});
+      }
     }
-    // shuffle
     for(var j=pts.length-1;j>0;j--){var k=Math.floor(Math.random()*(j+1));var tmp=pts[j];pts[j]=pts[k];pts[k]=tmp;}
     return pts;
   }
@@ -812,6 +1099,8 @@ function initTagGame(){
   function updateMapPercents(pcts){
     for(var i=0;i<5;i++){var el=document.getElementById("mapPickPct"+i);if(el)el.textContent=(pcts[i]||0)+"%";}
     var b0=document.getElementById("mapPick0");if(b0)b0.classList.toggle("selected",myMapVote===0);
+    var b1=document.getElementById("mapPick1");if(b1)b1.classList.toggle("selected",myMapVote===1);
+    var b2=document.getElementById("mapPick2");if(b2)b2.classList.toggle("selected",myMapVote===2);
   }
   function startModeVoteTimer(){
     clearVoteTimer();
@@ -850,7 +1139,7 @@ function initTagGame(){
     clearVoteTimer();
     var counts=[0,0,0,0,0];
     for(var id in lobbyRoster){var v=lobbyRoster[id].mapVote;if(v===0||v===1||v===2||v===3||v===4)counts[v]++;}
-    var enabled=[0,1]; // Baseplate + Mountain
+    var enabled=[0,1,2];
     winningMap=pickWinner(counts,enabled);
     lobbyPhase="ingame";
     broadcastLobby();
@@ -919,7 +1208,7 @@ function initTagGame(){
     updateModePercents(getModePercents());
   }
   function castMapVote(idx){
-    if(lobbyPhase!=="mapvote"||(idx!==0&&idx!==1))return;
+    if(lobbyPhase!=="mapvote"||(idx!==0&&idx!==1&&idx!==2))return;
     myMapVote=idx;if(lobbyRoster[myId])lobbyRoster[myId].mapVote=idx;
     if(isHost){broadcastLobby();}
     else send(connections[roomCode],{type:"lobbyVote",id:myId,mapVote:idx});
@@ -987,10 +1276,10 @@ function initTagGame(){
     setRoleHud();
   }
   function genCode(){var ch="ABCDEFGHJKLMNPQRSTUVWXYZ23456789",r="";for(var i=0;i<6;i++)r+=ch[Math.floor(Math.random()*ch.length)];return r;}
-  function state(){return{type:"state",id:myId,name:myName,x:player.pos.x,y:player.pos.y,z:player.pos.z,yaw:player.yaw,colors:myColors,wp:walkPhase,mov:syncMoving?1:0,spr:syncSprint?1:0,og:player.onGround?1:0,jp:jumpPrep,vy:player.vel.y,lt:landTimer,role:myRole,sp:spectator?1:0};}
+  function state(){return{type:"state",id:myId,name:myName,x:player.pos.x,y:player.pos.y,z:player.pos.z,yaw:player.yaw,colors:myColors,wp:walkPhase,mov:syncMoving?1:0,spr:syncSprint?1:0,og:player.onGround?1:0,jp:jumpPrep,vy:player.vel.y,lt:landTimer,role:myRole,sp:spectator?1:0,pw:player.pondWade||0};}
   function remotePayload(id,rp){
     var t=rp.target;
-    return{type:"state",id:id,name:rp.name,x:t.x,y:t.y,z:t.z,yaw:t.yaw,colors:noobColors(),wp:t.wp||0,mov:t.mov?1:0,spr:t.spr?1:0,og:t.og?1:0,jp:t.jp||0,vy:t.vy||0,lt:t.lt||0,role:t.role||"runner",sp:t.sp?1:0};
+    return{type:"state",id:id,name:rp.name,x:t.x,y:t.y,z:t.z,yaw:t.yaw,colors:noobColors(),wp:t.wp||0,mov:t.mov?1:0,spr:t.spr?1:0,og:t.og?1:0,jp:t.jp||0,vy:t.vy||0,lt:t.lt||0,role:t.role||"runner",sp:t.sp?1:0,pw:t.pw||0};
   }
   function send(conn,d){if(conn&&conn.open)conn.send(d);}
   function broadcast(d,skip){for(var id in connections){if(id!==skip)send(connections[id],d);}}
@@ -1011,6 +1300,7 @@ function initTagGame(){
     if(d.lt!==undefined)rp.target.lt=d.lt;
     if(d.role!==undefined)rp.target.role=d.role;
     if(d.sp!==undefined)rp.target.sp=d.sp?1:0;
+    if(d.pw!==undefined)rp.target.pw=d.pw;
     updatePlayerList();
   }
   function applyMatchState(d){
@@ -1026,6 +1316,8 @@ function initTagGame(){
     if(d.winners)match.winners=d.winners;
     if(match.roles&&match.roles[myId])myRole=match.roles[myId];
     spectator=!!(match.spectators&&match.spectators[myId]);
+    if(spectator&&currentMap===2&&isInPond(player.pos.x,player.pos.z)){drowned=true;showDrownHud(true);}
+    else if(!spectator){drowned=false;showDrownHud(false);}
     setRoleHud();
     if(spectator&&localAvatar)localAvatar.group.visible=false;
     // apply spawn position once at start of match
@@ -1080,16 +1372,28 @@ function initTagGame(){
       return;
     }
     if(d.type==="lobbyReject"){setStatus("Room locked — cannot join");return;}
+    if(d.type==="pondDeath"&&isHost){
+      if(match.phase!=="playing")return;
+      var pid=d.id||fromId;
+      if(!pid||match.spectators[pid])return;
+      applyDrown(pid);
+      var sm={type:"match",phase:"playing",spectators:match.spectators};
+      broadcast(sm);applyMatchState(sm);
+      var alive=0;for(var id in match.roles){if(match.roles[id]==="runner"&&!match.spectators[id])alive++;}
+      if(alive<=0)endMatch("tagger");
+      return;
+    }
     if(d.type==="tagAttempt"&&isHost){
       if(match.phase!=="playing")return;
       if(match.taggerId!==fromId)return;
       var tid=d.target;
       if(!tid||tid===fromId)return;
       if(match.spectators[tid])return;
-      var tagP=(fromId===myId)?player.pos:(remotePlayers[fromId]?remotePlayers[fromId].avatar.position.clone().add(new THREE.Vector3(0,EYE,0)):null);
-      var tgtP=(tid===myId)?player.pos:(remotePlayers[tid]?remotePlayers[tid].avatar.position.clone().add(new THREE.Vector3(0,EYE,0)):null);
+      if(!match.roles[tid]||match.roles[tid]!=="runner")return;
+      var tagP=getEyePosForPlayer(fromId), tgtP=getEyePosForPlayer(tid);
       if(!tagP||!tgtP)return;
-      if(tagP.distanceTo(tgtP)>TAG_WORLD_RANGE)return;
+      if(tagDistXZ(tagP,tgtP)>TAG_WORLD_RANGE)return;
+      if(Math.abs(tagP.y-tgtP.y)>TAG_MAX_Y)return;
       match.spectators[tid]=true;
       var sm={type:"match",phase:"playing",spectators:match.spectators};
       broadcast(sm);applyMatchState(sm);
@@ -1176,6 +1480,12 @@ function initTagGame(){
     return{lArmX:0,rArmX:0,lArmZ:0,rArmZ:0,lLegX:0,rLegX:0,lLegZ:0,rLegZ:0,legSp:0,torsoX:0,headX:0,crouch:0};
   }
   function computeNoobPose(st){
+    if(st.pondSink>0.06){
+      var s=st.pondSink,flail=0.35+s*0.85;
+      return{lArmX:flail,rArmX:flail,lArmZ:s*0.2,rArmZ:-s*0.2,
+        lLegX:s*0.25,rLegX:s*0.2,lLegZ:0,rLegZ:0,legSp:0,
+        torsoX:s*0.12,headX:-s*0.2,crouch:0.1+s*0.65};
+    }
     if(st.jumpPrep>0)return poseFromSample(sampleJumpKeys(lerp(0,0.12,1-st.jumpPrep/JUMP_PREP)),true);
     if(st.landT>0){
       var lt=1-st.landT/LAND_DUR,p=sampleJumpKeys(lerp(0.9,1,lt));
@@ -1252,6 +1562,7 @@ function initTagGame(){
     var moving=false,spd=WALK,camOff=0,groundBefore=player.onGround;
     if(dashCd>0){dashCd=Math.max(0,dashCd-dt);if(!dashActive)updateDashHud();}
     updateMatchTimerUI();
+    updatePondHud();
     // Safety: if we are in-game but not locked, always show click prompt.
     if(playing&&!locked&&!inLobbyUi()){
       if(clickPlay)clickPlay.classList.add("show");
@@ -1302,11 +1613,16 @@ function initTagGame(){
       player.vel.y+=GRAV*dt;
       player.pos.x+=player.vel.x*dt;player.pos.z+=player.vel.z*dt;player.pos.y+=player.vel.y*dt;
       clampPlayerPos();
+      var inPond=isInPond(player.pos.x,player.pos.z);
+      if(inPond&&currentMap===2)updatePondSink(dt);
+      else{
+      player.pondWade=0;
       var groundY=playerGroundY(player.pos.x,player.pos.z);
       if(player.pos.y<=groundY){
         if(!groundBefore)landTimer=LAND_DUR;
         player.pos.y=groundY;player.vel.y=0;player.onGround=true;
       }else player.onGround=false;
+      }
       syncMoving=moving;syncSprint=false;
       camOff=updateHandAnim(dt,moving,spd);
       }
@@ -1316,7 +1632,7 @@ function initTagGame(){
       rp.avatar.position.y=t.y-EYE;rp.avatar.rotation.y=t.yaw;
       rp.avatar.visible=!t.sp;
       if(!t.og)rp.airTime=(rp.airTime||0)+dt;else rp.airTime=0;
-      animateNoobBody(rp,{onGround:!!t.og,airTime:rp.airTime||0,landT:t.lt||0,jumpPrep:t.jp||0,vy:t.vy||0,walkPhase:t.wp||0,moving:!!t.mov,sprint:!!t.spr},dt);}
+      animateNoobBody(rp,{onGround:!!t.og,airTime:rp.airTime||0,landT:t.lt||0,jumpPrep:t.jp||0,vy:t.vy||0,walkPhase:t.wp||0,moving:!!t.mov,sprint:!!t.spr,pondSink:t.pw||0},dt);}
     if(localAvatar&&viewMode>0&&playing&&!spectator){
       localAvatar.group.position.set(player.pos.x,player.pos.y-EYE,player.pos.z);
       localAvatar.group.rotation.y=player.yaw+(viewMode===2?Math.PI:0);
@@ -1325,7 +1641,7 @@ function initTagGame(){
         fg.position.z=viewMode===2?0.53:-0.53;
         if(fg.userData.plane)fg.userData.plane.rotation.y=viewMode===2?0:Math.PI;
       }
-      animateNoobBody(localAvatar,{onGround:player.onGround,airTime:airTime,landT:landTimer,jumpPrep:jumpPrep,vy:player.vel.y,walkPhase:walkPhase,moving:moving,sprint:false},dt);
+      animateNoobBody(localAvatar,{onGround:player.onGround,airTime:airTime,landT:landTimer,jumpPrep:jumpPrep,vy:player.vel.y,walkPhase:walkPhase,moving:moving,sprint:false,pondSink:player.pondWade||0},dt);
     }else if(localAvatar)localAvatar.group.visible=false;
     if(!scene||!camera||!renderer)return;
     if(viewMode>0&&playing){
