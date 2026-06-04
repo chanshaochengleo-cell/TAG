@@ -209,7 +209,7 @@ body.role-spectator #matchTimer.on{top:58px}
     <h1>Party Grounds</h1>
     <p id="menuSubtext">Loading...</p>
     <div class="nameRow">
-      <input id="nameInput" placeholder="Your username" maxlength="12">
+      <input id="nameInput" placeholder="Your username" maxlength="60">
       <button type="button" class="btn-save" id="saveNameBtn">Save name</button>
     </div>
     <button type="button" class="btn btn-blue" id="playSolo">Play Now (Solo)</button>
@@ -293,18 +293,19 @@ function initTagGame(){
   var matchTimerEl=document.getElementById("matchTimer");
   var menuStatus=document.getElementById("menuStatus");
   var NAME_SAVE_KEY="partyGroundsPlayerName";
+  var NAME_MAX=60;
+  function clampName(n){return String(n||"").trim().slice(0,NAME_MAX);}
   function setStatus(t){menuStatus.textContent=t;}
   function loadSavedName(){
     try{
       var s=localStorage.getItem(NAME_SAVE_KEY);
-      if(s&&s.trim()){nameInput.value=s.trim().slice(0,12);return;}
+      if(s&&s.trim()){nameInput.value=clampName(s);return;}
     }catch(e){}
     nameInput.value="Player"+Math.floor(Math.random()*900+100);
   }
   function savePlayerName(){
-    var n=nameInput.value.trim();
+    var n=clampName(nameInput.value);
     if(!n){setStatus("Enter a name first");return;}
-    n=n.slice(0,12);
     try{
       localStorage.setItem(NAME_SAVE_KEY,n);
       nameInput.value=n;
@@ -432,7 +433,7 @@ function initTagGame(){
   }
 
   document.getElementById("playSolo").addEventListener("click",function(){
-    myName=nameInput.value.trim()||"Player";
+    myName=clampName(nameInput.value)||"Player";
     myId="solo"+Math.random().toString(36).slice(2,9);
     multiplayer=false; playerNames={}; playerNames[myId]=myName;
     startPlaying();
@@ -1038,11 +1039,18 @@ function initTagGame(){
     return{group:g,parts:{torso:torso,torsoY:3,headJ:headJ,head:head,faceGroup:faceG,lArmJ:lA.joint,rArmJ:rA.joint,lLegJ:lL.joint,rLegJ:rL.joint,lArm:lA.mesh,rArm:rA.mesh,lLeg:lL.mesh,rLeg:rL.mesh}};
   }
   function nameTag(text){
-    var cv=document.createElement("canvas");cv.width=256;cv.height=64;
-    var cx=cv.getContext("2d");cx.fillStyle="rgba(255,255,255,0.9)";cx.fillRect(0,0,256,64);
-    cx.fillStyle="#111";cx.font="bold 28px sans-serif";cx.textAlign="center";cx.fillText(text,128,42);
+    text=clampName(text||"");
+    var fontSize=text.length>28?12:text.length>16?16:28;
+    var cv=document.createElement("canvas");
+    var cx=cv.getContext("2d");
+    cx.font="bold "+fontSize+"px sans-serif";
+    var w=Math.min(1024,Math.max(256,Math.ceil(cx.measureText(text).width)+24));
+    cv.width=w;cv.height=64;
+    cx=cv.getContext("2d");
+    cx.fillStyle="rgba(255,255,255,0.9)";cx.fillRect(0,0,w,64);
+    cx.fillStyle="#111";cx.font="bold "+fontSize+"px sans-serif";cx.textAlign="center";cx.fillText(text,w/2,42);
     var sp=new THREE.Sprite(new THREE.SpriteMaterial({map:new THREE.CanvasTexture(cv),transparent:true}));
-    sp.position.y=5.8;sp.scale.set(2.2,0.55,1);return sp;
+    sp.position.y=5.8;sp.scale.set(Math.min(6.5,Math.max(2.2,w/116)),0.55,1);return sp;
   }
   function updatePlayerList(){
     youNameEl.textContent=myName+" (you)";
@@ -1055,7 +1063,7 @@ function initTagGame(){
     if(multiplayer&&roomCode)roomHud.textContent="Room: "+roomCode;
     roomHud.classList.toggle("on",playing&&multiplayer);
   }
-  function addPlayerName(id,name){if(id&&name)playerNames[id]=name;updatePlayerList();}
+  function addPlayerName(id,name){if(id&&name)playerNames[id]=clampName(name);updatePlayerList();}
   function removePlayerName(id){delete playerNames[id];updatePlayerList();}
   function ensureLocalAvatar(){
     if(localAvatar)return;
@@ -1295,7 +1303,7 @@ function initTagGame(){
   }
   function startPlaying(){
     if(!scene||!camera||!renderer){setStatus("Game engine not ready - refresh page");return;}
-    playing=true; myName=nameInput.value.trim()||"Player";
+    playing=true; myName=clampName(nameInput.value)||"Player";
     playerNames[myId]=myName; menu.style.display="none";
     if(!multiplayer)clickPlay.classList.add("show");
     ensureLocalAvatar(); updatePlayerList(); dashCd=0;dashActive=null;updateDashHud();
@@ -1447,7 +1455,7 @@ function initTagGame(){
   function initPeer(host,code){
     return new Promise(function(resolve,reject){
       clearAllRemotePlayers();
-      roomCode=code;myName=nameInput.value.trim()||"Player";
+      roomCode=code;myName=clampName(nameInput.value)||"Player";
       myId=host?code:("p"+Math.random().toString(36).slice(2,9));
       isHost=host;multiplayer=true;myColors=noobColors();playerNames={};playerNames[myId]=myName;
       peer=host?new Peer(code):new Peer(myId);
