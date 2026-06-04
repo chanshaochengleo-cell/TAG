@@ -216,6 +216,9 @@ body.role-spectator #matchTimer.on{top:58px}
     <hr style="margin:0.8rem 0;border:none;border-top:1px solid #ddd">
     <button type="button" class="btn btn-blue" id="createBtn">Create Room</button>
     <input id="roomInput" placeholder="Room code" maxlength="6">
+    <label id="localMpRow" style="font-size:0.85rem;display:block;margin:0.4rem 0 0.2rem;text-align:left;cursor:pointer">
+      <input type="checkbox" id="localMpCheck" style="margin-right:0.35rem">本機分頁多人（同瀏覽器開兩分頁，不需雲端伺服器）
+    </label>
     <button type="button" class="btn btn-green" id="joinBtn">Join Room</button>
     <div id="hostPanel" hidden>
       <p>Room code:</p>
@@ -254,20 +257,36 @@ function initTagGame(){
   var openBtn=document.getElementById("openNewTab");
   if(openBtn)openBtn.addEventListener("click",function(){window.open(location.href,"_blank","noopener,noreferrer");});
   if(window.__TAG_FRAMED){return;}
-  function canMultiplayer(){return location.protocol==="https:";}
-  var PEER_OPTS={host:"0.peerjs.com",port:443,path:"/",secure:true,debug:1};
+  var LOCAL_MP_KEY="partyGroundsLocalMp";
+  var LOCAL_MP=false;
+  var peerConnectBusy=false;
+  var localBus=null;
+  function isLocalMpWanted(){
+    var cb=document.getElementById("localMpCheck");
+    if(cb)return !!cb.checked;
+    try{return new URLSearchParams(location.search).get("local")==="1";}catch(e){}
+    return location.protocol==="file:";
+  }
+  function refreshLocalMp(){
+    LOCAL_MP=isLocalMpWanted()&&typeof BroadcastChannel!=="undefined";
+  }
+  function canMultiplayer(){return location.protocol==="https:"||typeof BroadcastChannel!=="undefined";}
+  var PEER_OPTS={host:"0.peerjs.com",port:443,path:"/",secure:true,debug:0};
   function restoreMenuMpUi(){
     var hp=document.getElementById("hostPanel");
     if(hp)hp.hidden=true;
     var cb=document.getElementById("createBtn"),jb=document.getElementById("joinBtn"),ri=document.getElementById("roomInput");
     if(cb)cb.style.display="";if(jb)jb.style.display="";if(ri)ri.style.display="";
+    var lr=document.getElementById("localMpRow");if(lr)lr.style.display="";
   }
   function setMenuReadyStatus(){
-    if(canMultiplayer())setStatus("多人模式已就緒 — 按 Create Room 建立房間");
+    if(!canMultiplayer())return;
+    if(LOCAL_MP)setStatus("本機分頁多人已就緒 — 開兩個分頁後 Create / Join");
+    else setStatus("線上多人已就緒；若連不上請勾選「本機分頁多人」");
   }
   function peerErrorMessage(err){
     var m=(err&&(err.message||err.type))||String(err||"");
-    if(/Lost connection|network|server-error|socket/i.test(m))return "無法連到多人配對伺服器。請檢查網路／防火牆，或稍後再按 Create Room 重試。";
+    if(/Lost connection|network|server-error|socket|WebSocket/i.test(m))return "雲端配對伺服器連不上。請勾選「本機分頁多人」用兩個分頁測試，或稍後再試線上建房。";
     if(/unavailable-id/i.test(m))return "房間代碼已被使用，請再建立一次。";
     if(/timeout/i.test(m))return "連線逾時，請稍後再試。";
     if(/peer-unavailable|Could not connect/i.test(m))return "找不到主機，請確認房間代碼與主機是否在線。";
@@ -288,8 +307,8 @@ function initTagGame(){
     var sub=document.getElementById("menuSubtext"),tip=document.getElementById("fileTip");
     var online=canMultiplayer();
     if(sub){
-      if(online)sub.textContent="多人模式已就緒：Create Room / Join Room";
-      else sub.textContent="多人需要 https（安全連線）。你現在是："+location.protocol+"//"+location.host;
+      if(online)sub.textContent="線上多人需穩定網路；同電腦測試請勾「本機分頁多人」";
+      else sub.textContent="多人需要 https，或勾選本機分頁多人。你現在是："+location.protocol+"//"+location.host;
     }
     if(tip)tip.hidden=true;
   }
@@ -343,6 +362,17 @@ function initTagGame(){
   }
   loadSavedName();
   if(saveNameBtn)saveNameBtn.addEventListener("click",savePlayerName);
+  (function(){
+    var cb=document.getElementById("localMpCheck");
+    if(!cb)return;
+    try{var v=localStorage.getItem(LOCAL_MP_KEY);if(v==="1")cb.checked=true;}catch(e){}
+    if(location.protocol==="file:")cb.checked=true;
+    cb.addEventListener("change",function(){
+      try{localStorage.setItem(LOCAL_MP_KEY,cb.checked?"1":"0");}catch(e){}
+      refreshLocalMp();updateMenuEnv();setMenuReadyStatus();
+    });
+    refreshLocalMp();
+  })();
   updateMenuEnv();
   setMenuReadyStatus();
 
@@ -405,6 +435,29 @@ function initTagGame(){
     playerNames={};
     if(syncTimer){clearInterval(syncTimer);syncTimer=null;}
     if(peer){try{peer.destroy();}catch(e){}peer=null;}
+    if(localBus&&localBus.bc){try{localBus.bc.close();}catch(e){}localBus=null;}
+  }
+  function localRoomChannel(code){return "PG_LOCAL_"+code;}
+  function ensureLocalBus(code){
+    if(localBus&&localBus.code===code)return localBus;
+    if(localBus&&localBus.bc)try{localBus.bc.close();}catch(e){}
+    var bc=new BroadcastChannel(localRoomChannel(code));
+    localBus={code:code,bc:bc};
+    bc.onmessage=function(ev){
+      var m=ev.data||{};
+      if(!m||m.src===myId)return;
+      if(m.dst&&m.dst!=="*"&&m.dst!==myId)return;
+      if(m.type==="localClose"){delete connections[m.src];removePlayerName(m.src);return;}
+      if(m.data)handleData(m.src,m.data);
+    };
+    return localBus;
+  }
+  function localSend(dst,data){
+    if(!localBus||!localBus.bc)return;
+    localBus.bc.postMessage({src:myId,dst:dst||"*",data:data});
+  }
+  function localConn(peerId){
+    return {peer:peerId,open:true,__local:true,send:function(d){localSend(peerId,d);}};
   }
   function showRoll(text,sub){if(rollBig)rollBig.textContent=text||"ROLLING...";if(rollSub)rollSub.textContent=sub||"";setHud(rollHud,true);}
   function hideRoll(){setHud(rollHud,false);}
@@ -468,16 +521,22 @@ function initTagGame(){
   document.getElementById("createBtn").addEventListener("click",function(){
     if(typeof Peer==="undefined"){setStatus("Multiplayer needs GitHub Pages");return;}
     if(!canMultiplayer()){setStatus("Upload this index.html to GitHub Pages for multiplayer");return;}
-    setStatus("Creating...");
-    initPeer(true,genCode()).catch(function(e){setStatus(peerErrorMessage(e));});
+    if(peerConnectBusy){setStatus("正在連線中，請稍候…");return;}
+    refreshLocalMp();
+    peerConnectBusy=true;
+    setStatus(LOCAL_MP?"正在建立本機房間…":"正在連到線上伺服器…");
+    initPeer(true,genCode()).catch(function(e){setStatus(peerErrorMessage(e));}).finally(function(){peerConnectBusy=false;});
   });
   document.getElementById("joinBtn").addEventListener("click",function(){
     if(typeof Peer==="undefined"){setStatus("Multiplayer needs GitHub Pages");return;}
     if(!canMultiplayer()){setStatus("Upload this index.html to GitHub Pages for multiplayer");return;}
+    if(peerConnectBusy){setStatus("正在連線中，請稍候…");return;}
+    refreshLocalMp();
     var code=document.getElementById("roomInput").value.trim().toUpperCase();
     if(code.length<4){setStatus("Enter room code");return;}
-    setStatus("Connecting...");
-    initPeer(false,code).then(function(){setStatus("已加入房間！");}).catch(function(e){setStatus(peerErrorMessage(e));});
+    peerConnectBusy=true;
+    setStatus(LOCAL_MP?"正在加入本機房間…":"正在連到線上伺服器…");
+    initPeer(false,code).then(function(){setStatus("已加入房間！");}).catch(function(e){setStatus(peerErrorMessage(e));}).finally(function(){peerConnectBusy=false;});
   });
   document.getElementById("startBtn").addEventListener("click",function(){startPlaying();startSync();enterMultiplayerLobby();});
   document.getElementById("readyLobbyBtn").addEventListener("click",onReadyLobbyBtn);
@@ -1343,7 +1402,10 @@ function initTagGame(){
     return{type:"state",id:id,name:rp.name,x:t.x,y:t.y,z:t.z,yaw:t.yaw,colors:noobColors(),wp:t.wp||0,mov:t.mov?1:0,spr:t.spr?1:0,og:t.og?1:0,jp:t.jp||0,vy:t.vy||0,lt:t.lt||0,role:t.role||"runner",sp:t.sp?1:0,pw:t.pw||0};
   }
   function send(conn,d){if(conn&&conn.open)conn.send(d);}
-  function broadcast(d,skip){for(var id in connections){if(id!==skip)send(connections[id],d);}}
+  function broadcast(d,skip){
+    if(LOCAL_MP){localSend("*",d);return;}
+    for(var id in connections){if(id!==skip)send(connections[id],d);}
+  }
   function upsertRemote(d){
     if(d.id===myId)return;
     if(match.phase==="playing"&&match.roles&&Object.keys(match.roles).length&&!match.roles[d.id])return;
@@ -1460,6 +1522,7 @@ function initTagGame(){
     }
     if(d.type==="state")upsertRemote(d);
     if(d.type==="join"){
+      if(LOCAL_MP&&isHost&&!connections[fromId])connections[fromId]=localConn(fromId);
       upsertRemote(d);send(connections[fromId]||connections[roomCode],Object.assign(state(),{type:"join"}));
       if(isHost){broadcast(state(),fromId);for(var id in remotePlayers){if(id===fromId)continue;
         send(connections[fromId],remotePayload(id,remotePlayers[id]));}}
@@ -1478,14 +1541,31 @@ function initTagGame(){
       if(remotePlayers[id]){scene.remove(remotePlayers[id].avatar);delete remotePlayers[id];}
       if(isHost){broadcastLobby();updateReadyLobbyUI();document.getElementById("waitStatus").textContent=Object.keys(connections).length+" joined";}});
   }
-  function startSync(){if(syncTimer)return;syncTimer=setInterval(function(){if(!playing||!multiplayer)return;var s=state();if(isHost)broadcast(s);else if(connections[roomCode])send(connections[roomCode],s);},50);}
+  function startSync(){if(syncTimer)return;syncTimer=setInterval(function(){if(!playing||!multiplayer)return;var s=state();if(LOCAL_MP){localSend("*",s);return;}if(isHost)broadcast(s);else if(connections[roomCode])send(connections[roomCode],s);},50);}
   function initPeer(host,code){
     return new Promise(function(resolve,reject){
       if(peer){teardownSession();restoreMenuMpUi();}
+      refreshLocalMp();
       clearAllRemotePlayers();
       roomCode=code;myName=clampName(nameInput.value)||"Player";
       myId=host?code:("p"+Math.random().toString(36).slice(2,9));
       isHost=host;multiplayer=true;myColors=noobColors();playerNames={};playerNames[myId]=myName;
+      if(LOCAL_MP){
+        ensureLocalBus(code);
+        connections={};remotePlayers={};
+        connections[code]=localConn(code);
+        localSend("*",{type:"join",id:myId,name:myName});
+        if(!host){
+          sendLobbyHello(connections[code]);
+          startPlaying();startSync();enterMultiplayerLobby();resolve();
+        }else{
+          document.getElementById("roomCode").textContent=code;document.getElementById("hostPanel").hidden=false;
+          document.getElementById("createBtn").style.display="none";document.getElementById("joinBtn").style.display="none";document.getElementById("roomInput").style.display="none";
+          var lr=document.getElementById("localMpRow");if(lr)lr.style.display="none";
+          setStatus("本機房間已建立！另開分頁用相同代碼 Join");resolve();
+        }
+        return;
+      }
       var settled=false;
       function fail(err){
         if(settled)return;
